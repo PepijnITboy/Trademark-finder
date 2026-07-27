@@ -22,6 +22,10 @@ const createWatchedTrademarkSchema = z.object({
 const updateSettingsSchema = z.object({
   label: z.string().trim().min(1).max(300).optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
+  minScoreThreshold: z.number().min(0).max(100).optional(),
+  classMode: z.enum(['eigen', 'custom', 'all']).optional(),
+  selectedNiceClasses: z.array(z.number().int().min(1).max(45)).optional(),
+  watchedRegisters: z.array(z.string().min(1)).optional(),
 });
 
 interface LookupCandidate {
@@ -102,6 +106,10 @@ export async function registerWatchedTrademarkRoutes(app: FastifyInstance): Prom
   app.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const organizationId = getOrganizationId(app);
     const input = createWatchedTrademarkSchema.parse(request.body);
+
+    const existing = await app.store.listWatchedTrademarks(organizationId);
+    const activeCount = existing.filter((record) => record.status === 'active').length;
+    app.orgStore.assertCanAddWatchedTrademark(organizationId, activeCount);
 
     const snapshot = await app.boipConnector.fetchTrademarkByNumber(input.registrationNumber);
     if (!snapshot) {

@@ -66,19 +66,20 @@ export type NotificationTypeEnum =
   | 'connector_down'
   | 'ai_budget_exhausted';
 
-export type WorkspaceRole = 'owner' | 'admin' | 'member';
-
 export type FeatureFlagEnum =
   | 'ai_enrichment'
   | 'pdf_export'
   | 'csv_export'
   | 'email_notifications'
   | 'multi_register_watch'
-  | 'platform_access';
+  | 'platform_access'
+  | 'merkrechten_chat';
 
-export type SubscriptionPlanCode = 'starter' | 'pro' | 'agency';
+export type SubscriptionPlanCode = 'basis' | 'starter' | 'plus' | 'pro' | 'enterprise' | 'agency';
 
-export type SubscriptionStatusEnum = 'trialing' | 'active' | 'past_due' | 'canceled';
+export type SubscriptionStatusEnum = 'trialing' | 'active' | 'past_due' | 'canceled' | 'pending_downgrade';
+
+export type WorkspaceRole = 'owner' | 'admin' | 'jurist' | 'member';
 
 export type OppositionRuleKind = 'calendar_days' | 'months';
 

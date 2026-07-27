@@ -18,7 +18,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'dot' : 'list',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:8000',
     trace: 'on-first-retry',
   },
   projects: [
@@ -28,8 +28,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm exec vite --port 5173 --strictPort',
-    url: 'http://localhost:5173',
+    command: 'VITE_API_URL=http://localhost:3001 pnpm exec vite --port 8000 --strictPort',
+    url: 'http://localhost:8000',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

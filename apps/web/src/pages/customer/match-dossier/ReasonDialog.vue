@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import ConfirmDialog from '../../../components/ConfirmDialog.vue';
+import MwButton from '../../../components/MwButton.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -8,12 +9,22 @@ const props = withDefaults(
     title: string;
     description?: string;
     placeholder?: string;
+    /** Prefills the reason field when the dialog opens. */
+    preset?: string;
     required?: boolean;
     confirmLabel?: string;
     tone?: 'neutral' | 'danger';
     busy?: boolean;
   }>(),
-  { description: undefined, placeholder: 'Toelichting (optioneel)…', required: false, confirmLabel: 'Bevestigen', tone: 'neutral', busy: false },
+  {
+    description: undefined,
+    placeholder: 'Toelichting (optioneel)…',
+    preset: undefined,
+    required: false,
+    confirmLabel: 'Bevestigen',
+    tone: 'neutral',
+    busy: false,
+  },
 );
 
 const emit = defineEmits<{ (e: 'confirm', reason: string): void; (e: 'cancel'): void }>();
@@ -22,9 +33,13 @@ const reason = ref('');
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) reason.value = '';
+    if (isOpen) reason.value = props.preset ?? '';
   },
 );
+
+function applyPreset(value: string): void {
+  reason.value = value;
+}
 </script>
 
 <template>
@@ -39,6 +54,14 @@ watch(
     @confirm="emit('confirm', reason.trim())"
     @cancel="emit('cancel')"
   >
+    <div class="mb-3 flex flex-wrap gap-2">
+      <MwButton type="button" size="sm" variant="secondary" @click="applyPreset('Niet relevant')">
+        Niet relevant
+      </MwButton>
+      <MwButton type="button" size="sm" variant="tertiary" @click="applyPreset('Andere waren/diensten')">
+        Andere waren/diensten
+      </MwButton>
+    </div>
     <textarea
       v-model="reason"
       rows="4"

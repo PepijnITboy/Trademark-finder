@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import PageHeader from '../../components/PageHeader.vue';
-import StatusBadge from '../../components/StatusBadge.vue';
+import MwPage from '../../components/MwPage.vue';
 
 defineProps<{ title: string; description?: string }>();
 </script>
 
 <template>
-  <PageHeader :title="title" :description="description">
-    <template #actions>
-      <StatusBadge label="Platformbeheer" tone="accent" />
+  <MwPage :title="title" :description="description">
+    <template v-if="$slots.actions" #actions>
       <slot name="actions" />
     </template>
-  </PageHeader>
+    <slot />
+  </MwPage>
 </template>

@@ -30,10 +30,32 @@ export function formatNiceClasses(classes: readonly number[]): string {
 
 export function formatDaysRemaining(days: number | null | undefined): string {
   if (days === null || days === undefined) return '—';
-  if (days < 0) return `${Math.abs(days)} dagen verstreken`;
+  // Approaching-deadline surfaces must never show "verstreken" — expired
+  // matches belong in the archive with {@link formatDaysOverdue}.
+  if (days < 0) return '—';
   if (days === 0) return 'Vandaag verloopt de termijn';
   if (days === 1) return '1 dag resterend';
   return `${days} dagen resterend`;
+}
+
+/** Copy for archived matches whose opposition window already closed. */
+export function formatDaysOverdue(daysOverdue: number): string {
+  const days = Math.abs(daysOverdue);
+  if (days === 1) return '1 dag verstreken';
+  return `${days} dagen verstreken`;
+}
+
+export type OverdueSeverity = 'mild' | 'moderate' | 'severe';
+
+export function overdueSeverity(daysOverdue: number): OverdueSeverity {
+  const days = Math.abs(daysOverdue);
+  if (days <= 7) return 'mild';
+  if (days <= 30) return 'moderate';
+  return 'severe';
+}
+
+export function formatMatchScorePercent(totalScore: number): string {
+  return `${Math.round(totalScore)}%`;
 }
 
 export function formatPercentage(value: number): string {

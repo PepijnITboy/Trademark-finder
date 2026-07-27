@@ -15,12 +15,15 @@ withDefaults(
     emptyTitle?: string;
     emptyDescription?: string;
     clickableRows?: boolean;
+    /** Omit outer card chrome when nested in MwCard. */
+    embedded?: boolean;
   }>(),
   {
     loading: false,
     emptyTitle: 'Geen gegevens',
     emptyDescription: 'Er is niets om te tonen.',
     clickableRows: false,
+    embedded: false,
   },
 );
 
@@ -35,15 +38,18 @@ function fallbackCellValue(row: T, key: string): string {
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-lg border border-border bg-surface">
-    <table class="w-full border-collapse text-left text-sm">
+  <div
+    class="overflow-hidden bg-surface"
+    :class="embedded ? '' : 'rounded-lg border border-border shadow-sm'"
+  >
+    <table class="w-full border-collapse text-left text-[0.9375rem]">
       <thead>
         <tr class="border-b border-border bg-surface-muted/60">
           <th
             v-for="column in columns"
             :key="column.key"
             scope="col"
-            class="px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-text-muted"
+            class="px-5 py-3.5 text-xs font-medium uppercase tracking-wide text-text-muted"
             :class="{ 'text-right': column.align === 'right', 'text-center': column.align === 'center' }"
             :style="column.width ? { width: column.width } : undefined"
           >
@@ -54,16 +60,16 @@ function fallbackCellValue(row: T, key: string): string {
       <tbody>
         <template v-if="loading">
           <tr v-for="i in skeletonRows" :key="i" class="border-b border-border last:border-b-0">
-            <td v-for="column in columns" :key="column.key" class="px-4 py-3">
-              <div class="h-3.5 w-full max-w-[10rem] animate-pulse rounded bg-surface-muted" />
+            <td v-for="column in columns" :key="column.key" class="px-5 py-4">
+              <div class="h-4 w-full max-w-[10rem] animate-pulse rounded bg-surface-muted" />
             </td>
           </tr>
         </template>
         <template v-else-if="rows.length === 0">
           <tr>
-            <td :colspan="columns.length" class="px-4 py-10 text-center">
-              <p class="text-sm font-medium text-text">{{ emptyTitle }}</p>
-              <p class="mt-1 text-xs text-text-muted">{{ emptyDescription }}</p>
+            <td :colspan="columns.length" class="px-5 py-12 text-center">
+              <p class="text-base font-medium text-text">{{ emptyTitle }}</p>
+              <p class="mt-1.5 text-sm text-text-muted">{{ emptyDescription }}</p>
             </td>
           </tr>
         </template>
@@ -80,7 +86,7 @@ function fallbackCellValue(row: T, key: string): string {
             <td
               v-for="column in columns"
               :key="column.key"
-              class="px-4 py-3 align-middle text-text"
+              class="px-5 py-4 align-middle text-text"
               :class="{ 'text-right': column.align === 'right', 'text-center': column.align === 'center' }"
             >
               <slot :name="`cell-${column.key}`" :row="row">

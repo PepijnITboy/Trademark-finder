@@ -16,15 +16,15 @@ function submit(): void {
 <template>
   <div class="space-y-6">
     <div>
-      <h2 class="text-base font-semibold text-text">Officieel registratienummer</h2>
+      <h2 class="text-base font-semibold text-text">Officieel depotnummer</h2>
       <p class="mt-1 text-sm text-text-muted">
-        Voer het officiële registratie- of aanvraagnummer in zoals vermeld bij
+        Voer het officiële depot- of aanvraagnummer in zoals vermeld bij
         <span class="font-medium text-text">{{ registryCode }}</span>.
       </p>
     </div>
 
     <div class="max-w-sm">
-      <label for="registration-number" class="mb-1.5 block text-sm font-medium text-text">Registratienummer</label>
+      <label for="registration-number" class="mb-1.5 block text-sm font-medium text-text">Depotnummer</label>
       <input
         id="registration-number"
         :value="modelValue"
@@ -35,7 +35,7 @@ function submit(): void {
         @keydown.enter="submit"
       />
       <p v-if="touched && modelValue.trim().length === 0" class="mt-1.5 text-xs text-danger">
-        Voer een registratienummer in.
+        Voer een depotnummer in.
       </p>
       <p v-else-if="errorMessage" class="mt-1.5 text-xs text-danger">{{ errorMessage }}</p>
     </div>
@@ -46,7 +46,8 @@ function submit(): void {
       </button>
       <button
         type="button"
-        class="rounded-md bg-accent-strong px-3.5 py-2 text-sm font-medium text-white hover:bg-accent"
+        class="rounded-md bg-accent-strong px-3.5 py-2 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="modelValue.trim().length === 0"
         @click="submit"
       >
         Merk opzoeken

@@ -109,6 +109,12 @@ export async function buildDemoSeed(organizationId: string): Promise<DemoSeed> {
     markText: lumaroSnapshot.markText,
     niceClasses: lumaroSnapshot.niceClasses,
     eligibility: lumaroEligibility,
+    watchSettings: {
+      minScoreThreshold: 25,
+      classMode: 'eigen',
+      selectedNiceClasses: [...lumaroSnapshot.niceClasses],
+      watchedRegisters: ['BOIP'],
+    },
     createdAt: now,
     updatedAt: now,
   };
@@ -125,6 +131,12 @@ export async function buildDemoSeed(organizationId: string): Promise<DemoSeed> {
     markText: novexaSnapshot.markText,
     niceClasses: novexaSnapshot.niceClasses,
     eligibility: boipV1WatchEligibilityPolicy.evaluate(novexaSnapshot),
+    watchSettings: {
+      minScoreThreshold: 40,
+      classMode: 'eigen',
+      selectedNiceClasses: [...novexaSnapshot.niceClasses],
+      watchedRegisters: ['BOIP'],
+    },
     createdAt: now,
     updatedAt: now,
   };
@@ -145,13 +157,25 @@ export async function buildDemoSeed(organizationId: string): Promise<DemoSeed> {
     LUMERO: 'under_review',
     BRENTIQ: 'dismissed',
     VELORA: 'new',
-    KASTORIN: 'new',
+    KASTORIN: 'opposition_deadline_passed',
   };
 
   const matches = await Promise.all(
     BOIP_FIXTURE_PUBLICATIONS.map(async (publication) => {
-      const candidate = toCandidateApplication(mapBoipPublicationToCandidateApplicationInput(publication));
+      let candidate = toCandidateApplication(mapBoipPublicationToCandidateApplicationInput(publication));
       const status = matchStatusByMarkText[publication.markText] ?? 'new';
+      // KASTORIN fixture is deliberately past its opposition window and only
+      // appears in the archive as an expired-deadline example.
+      if (status === 'opposition_deadline_passed' && candidate.oppositionDeadline) {
+        candidate = {
+          ...candidate,
+          oppositionDeadline: {
+            ...candidate.oppositionDeadline,
+            startDate: '2026-02-10',
+            deadlineDate: '2026-04-10',
+          },
+        };
+      }
       return buildScoredMatch(lumaroWatched, lumaroRecord, candidate, status);
     }),
   );

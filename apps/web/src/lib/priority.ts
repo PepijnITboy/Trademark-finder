@@ -21,7 +21,6 @@ export interface DeadlineBucket {
 }
 
 const DEADLINE_BUCKETS: readonly DeadlineBucket[] = [
-  { key: 'passed', labelNl: 'Termijn verstreken' },
   { key: 'urgent', labelNl: 'Deze week' },
   { key: 'soon', labelNl: 'Komende 14 dagen' },
   { key: 'upcoming', labelNl: 'Komende 30 dagen' },
@@ -31,7 +30,7 @@ const DEADLINE_BUCKETS: readonly DeadlineBucket[] = [
 
 export function deadlineBucketKey(daysRemaining: number | null): string {
   if (daysRemaining === null) return 'unknown';
-  if (daysRemaining < 0) return 'passed';
+  if (daysRemaining < 0) return 'unknown';
   if (daysRemaining <= 7) return 'urgent';
   if (daysRemaining <= 14) return 'soon';
   if (daysRemaining <= 30) return 'upcoming';

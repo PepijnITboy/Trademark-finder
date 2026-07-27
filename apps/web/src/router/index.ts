@@ -5,13 +5,22 @@ import PlatformLayout from '../layouts/PlatformLayout.vue';
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/app/overzicht' },
+    { path: '/', redirect: '/app/dashboard' },
     {
       path: '/app',
       component: CustomerLayout,
       children: [
-        { path: '', redirect: '/app/overzicht' },
-        { path: 'overzicht', name: 'app-overzicht', component: () => import('../pages/customer/OverzichtPage.vue') },
+        { path: '', redirect: '/app/dashboard' },
+        {
+          path: 'dashboard',
+          name: 'app-dashboard',
+          component: () => import('../pages/customer/OverzichtPage.vue'),
+        },
+        {
+          path: 'overzicht',
+          redirect: '/app/dashboard',
+        },
+        { path: 'matches/mogelijk', name: 'app-matches-possible', component: () => import('../pages/customer/MatchesPage.vue') },
         { path: 'matches', name: 'app-matches', component: () => import('../pages/customer/MatchesPage.vue') },
         {
           path: 'matches/:id',
@@ -36,15 +45,44 @@ export const router = createRouter({
         { path: 'deadlines', name: 'app-deadlines', component: () => import('../pages/customer/DeadlinesPage.vue') },
         { path: 'archief', name: 'app-archief', component: () => import('../pages/customer/ArchiefPage.vue') },
         {
+          path: 'merken/archief',
+          name: 'app-merken-archief',
+          component: () => import('../pages/customer/MerkenArchiefPage.vue'),
+        },
+        {
           path: 'organisatie',
           name: 'app-organisatie',
           component: () => import('../pages/customer/OrganisatiePage.vue'),
         },
         { path: 'abonnement', name: 'app-abonnement', component: () => import('../pages/customer/AbonnementPage.vue') },
         {
+          path: 'betalingen',
+          name: 'app-betalingen',
+          component: () => import('../pages/customer/BetalingenPage.vue'),
+        },
+        {
+          path: 'chat',
+          name: 'app-chat',
+          component: () => import('../pages/customer/ChatPage.vue'),
+        },
+        {
+          path: 'merkonderzoek/nieuw',
+          name: 'app-merkonderzoek-nieuw',
+          component: () => import('../pages/customer/NameResearchWizardPage.vue'),
+        },
+        {
+          path: 'merkonderzoek',
+          name: 'app-merkonderzoek',
+          component: () => import('../pages/customer/NameResearchListPage.vue'),
+        },
+        {
+          path: 'merkonderzoek/:id',
+          name: 'app-merkonderzoek-detail',
+          component: () => import('../pages/customer/NameResearchDetailPage.vue'),
+        },
+        {
           path: 'instellingen',
-          name: 'app-instellingen',
-          component: () => import('../pages/customer/InstellingenPage.vue'),
+          redirect: '/app/organisatie?tab=weergave',
         },
         {
           path: 'databronnen',
@@ -71,15 +109,30 @@ export const router = createRouter({
           component: () => import('../pages/platform/AbonnementenPage.vue'),
         },
         {
+          path: 'betalingen',
+          name: 'platform-betalingen',
+          component: () => import('../pages/platform/BetalingenPage.vue'),
+        },
+        {
           path: 'registers',
           name: 'platform-registers',
           component: () => import('../pages/platform/RegistersPage.vue'),
+        },
+        {
+          path: 'merkonderzoek',
+          name: 'platform-merkonderzoek',
+          component: () => import('../pages/platform/NameResearchOpsPage.vue'),
         },
         { path: 'imports', name: 'platform-imports', component: () => import('../pages/platform/ImportsPage.vue') },
         {
           path: 'matches-scoring',
           name: 'platform-matches-scoring',
           component: () => import('../pages/platform/MatchesScoringPage.vue'),
+        },
+        {
+          path: 'chat',
+          name: 'platform-chat',
+          component: () => import('../pages/platform/ChatPage.vue'),
         },
         { path: 'ai-kosten', name: 'platform-ai-kosten', component: () => import('../pages/platform/AiKostenPage.vue') },
         {

@@ -132,7 +132,7 @@ export class PlatformStore {
       {
         id: createId(),
         name: 'Voorbeeld Merkengemachtigden & Partners',
-        plan: 'agency',
+        plan: 'enterprise',
         status: 'past_due',
         renewsAt: null,
         createdAt: now,

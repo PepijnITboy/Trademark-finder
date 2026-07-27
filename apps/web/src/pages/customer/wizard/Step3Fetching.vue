@@ -7,7 +7,7 @@ defineProps<{ registrationNumber: string }>();
     <span class="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent-strong" aria-hidden="true" />
     <div>
       <p class="text-sm font-medium text-text">Officiële gegevens worden opgehaald…</p>
-      <p class="mt-1 text-xs text-text-muted">Registratienummer {{ registrationNumber }}</p>
+      <p class="mt-1 text-xs text-text-muted">Depotnummer {{ registrationNumber }}</p>
     </div>
   </div>
 </template>

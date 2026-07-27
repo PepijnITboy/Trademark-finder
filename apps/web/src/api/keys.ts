@@ -6,7 +6,7 @@ export const queryKeys = {
     detail: (id: string) => ['watched-trademarks', id] as const,
   },
   matches: {
-    all: (status?: string) => ['matches', status ?? 'ALL'] as const,
+    all: (scope?: string) => ['matches', scope ?? 'ALL'] as const,
     detail: (id: string) => ['matches', 'detail', id] as const,
   },
   deadlines: ['deadlines'] as const,
@@ -14,5 +14,27 @@ export const queryKeys = {
   registerSources: ['register-sources'] as const,
   notifications: ['notifications'] as const,
   settings: ['settings'] as const,
+  organization: {
+    profile: ['organization', 'profile'] as const,
+    members: ['organization', 'members'] as const,
+  },
+  notificationRecipients: ['notification-recipients'] as const,
+  subscription: {
+    current: ['subscription'] as const,
+    plans: ['subscription', 'plans'] as const,
+  },
+  invoices: ['invoices'] as const,
+  chat: {
+    threads: ['chat', 'threads'] as const,
+    thread: (id: string) => ['chat', 'threads', id] as const,
+  },
   platformHealth: ['platform', 'health'] as const,
+  platformPlans: ['platform', 'plans'] as const,
+  platformChatThreads: ['platform', 'chat', 'threads'] as const,
+  platformBilling: ['platform', 'billing'] as const,
+  nameResearch: {
+    credits: ['name-research', 'credits'] as const,
+    orders: ['name-research', 'orders'] as const,
+    registers: ['name-research', 'registers'] as const,
+  },
 };

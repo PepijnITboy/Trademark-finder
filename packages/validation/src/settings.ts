@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const digestFrequencySchema = z.enum(['DAILY', 'WEEKLY', 'IMMEDIATE']);
+export const digestFrequencySchema = z.enum(['DAILY', 'WEEKLY']);
 export type DigestFrequency = z.infer<typeof digestFrequencySchema>;
 
 export const organizationSettingsSchema = z.object({

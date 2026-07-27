@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { onUnmounted, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -24,13 +24,31 @@ const props = withDefaults(
 
 const emit = defineEmits<{ (e: 'confirm'): void; (e: 'cancel'): void }>();
 
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    emit('cancel');
+  }
+}
+
 watch(
   () => props.open,
   (isOpen) => {
     if (typeof document === 'undefined') return;
     document.body.style.overflow = isOpen ? 'hidden' : '';
+    if (isOpen) {
+      document.addEventListener('keydown', onKeydown);
+    } else {
+      document.removeEventListener('keydown', onKeydown);
+    }
   },
 );
+
+onUnmounted(() => {
+  if (typeof document === 'undefined') return;
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', onKeydown);
+});
 </script>
 
 <template>
@@ -51,7 +69,7 @@ watch(
         <div class="mt-6 flex justify-end gap-2">
           <button
             type="button"
-            class="rounded-md border border-border px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            class="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text shadow-sm transition-colors hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             @click="emit('cancel')"
           >
             {{ cancelLabel }}

@@ -2,6 +2,7 @@ import type { CandidateApplication, TrademarkMatch, WatchedTrademark } from '@me
 import { normalizeMarkName } from '@merkwacht/normalization';
 import { generatePhoneticRepresentations } from '@merkwacht/phonetics';
 import { scoreMatch, type ScoringContext } from '@merkwacht/scoring';
+import { isWithinOppositionWindow } from './opposition-candidates.js';
 import type { PipelineContext } from './types.js';
 
 /**
@@ -48,7 +49,15 @@ export async function scoreAndUpsertMatch(
   context: PipelineContext,
   watched: WatchedTrademark,
   candidate: CandidateApplication,
+  now: Date = new Date(),
 ): Promise<ScoreAndUpsertResult> {
+  // Only oppose applications whose register-specific opposition window is
+  // still open. Past-deadline / withdrawn / refused candidates must never
+  // enter the customer triage queues.
+  if (!isWithinOppositionWindow(candidate, now)) {
+    return { match: null, isNew: false, totalScore: 0 };
+  }
+
   const scoringContext = buildScoringContext(watched, candidate);
   const result = await scoreMatch(scoringContext, context.ai ? { ai: context.ai } : {});
 

@@ -15,6 +15,13 @@ import type {
 } from '@merkwacht/domain';
 import type { DigestFrequency } from '@merkwacht/validation';
 
+export interface WatchedTrademarkWatchSettings {
+  readonly minScoreThreshold: number;
+  readonly classMode: 'eigen' | 'custom' | 'all';
+  readonly selectedNiceClasses: readonly number[];
+  readonly watchedRegisters: readonly string[];
+}
+
 export interface WatchedTrademarkRecord {
   readonly id: string;
   readonly organizationId: string;
@@ -26,6 +33,7 @@ export interface WatchedTrademarkRecord {
   readonly markText: string;
   readonly niceClasses: readonly number[];
   readonly eligibility: WatchEligibilityDecision;
+  readonly watchSettings: WatchedTrademarkWatchSettings;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -152,4 +160,183 @@ export interface PlatformHealthResponse {
   readonly status: string;
   readonly service: string;
   readonly timestamp: string;
+}
+
+export interface OrganizationProfileRecord {
+  readonly organizationId: string;
+  legalName: string;
+  addressLine: string;
+  postalCode: string;
+  city: string;
+  country: string;
+  kvkNumber: string;
+  contactEmail: string;
+  billingEmail: string;
+  phone: string;
+  latitude: number | null;
+  longitude: number | null;
+  readonly updatedAt: string;
+}
+
+export type OrganizationMemberRole = 'owner' | 'admin' | 'jurist';
+
+export interface OrganizationMemberRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  email: string;
+  displayName: string;
+  role: OrganizationMemberRole;
+  jobTitle: string | null;
+  phone: string | null;
+  readonly createdAt: string;
+  updatedAt: string;
+}
+
+export interface ParsedAddressResult {
+  readonly addressLine: string;
+  readonly postalCode: string;
+  readonly city: string;
+  readonly country: string;
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+export interface NotificationRecipientRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  email: string;
+  digestFrequency: DigestFrequency;
+  minScoreThreshold: number;
+  isActive: boolean;
+  watchedTrademarkIds: readonly string[];
+  readonly createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateNotificationRecipientInput {
+  readonly email: string;
+  readonly digestFrequency?: DigestFrequency;
+  readonly minScoreThreshold?: number;
+  readonly allWatches?: boolean;
+  readonly watchedTrademarkIds?: readonly string[];
+}
+
+export interface UpdateNotificationRecipientInput {
+  readonly digestFrequency?: DigestFrequency;
+  readonly minScoreThreshold?: number;
+  readonly isActive?: boolean;
+  readonly allWatches?: boolean;
+  readonly watchedTrademarkIds?: readonly string[];
+}
+
+export type SubscriptionPlan = 'basis' | 'starter' | 'plus' | 'pro' | 'enterprise';
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'pending_downgrade';
+export type SupportTier = 'basis' | 'standaard' | 'prioriteit' | 'dedicated';
+export type FeatureFlag =
+  | 'ai_enrichment'
+  | 'pdf_export'
+  | 'csv_export'
+  | 'email_notifications'
+  | 'multi_register_watch'
+  | 'platform_access'
+  | 'merkrechten_chat';
+
+export interface SubscriptionStateRecord {
+  readonly organizationId: string;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  pendingPlan: SubscriptionPlan | null;
+  currentPeriodEnd: string;
+  updatedAt: string;
+}
+
+export interface PlanCatalogRecord {
+  readonly code: SubscriptionPlan;
+  displayNameNl: string;
+  priceMonthlyCents: number;
+  maxWatchedTrademarks: number;
+  maxNotificationEmails: number;
+  supportTier: SupportTier;
+  features: Readonly<Record<FeatureFlag, boolean>>;
+  updatedAt: string;
+}
+
+export interface SubscriptionEntitlements {
+  readonly organizationId: string;
+  readonly plan: SubscriptionPlan;
+  readonly status: SubscriptionStatus;
+  readonly maxWatchedTrademarks: number;
+  readonly maxNotificationEmails: number;
+  readonly supportTier: SupportTier;
+  readonly features: Readonly<Record<FeatureFlag, boolean>>;
+  readonly pendingPlan: SubscriptionPlan | null;
+  readonly currentPeriodEnd: string | null;
+}
+
+export type InvoiceStatus = 'open' | 'paid' | 'void';
+
+export interface InvoiceRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  number: string;
+  status: InvoiceStatus;
+  amountCents: number;
+  description: string;
+  paidAt: string | null;
+  pdfAvailable: boolean;
+  readonly createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformInvoiceRecord extends InvoiceRecord {
+  readonly organizationName: string;
+}
+
+export type SupportThreadStatus = 'open' | 'closed';
+
+export interface SupportThreadRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  subject: string;
+  status: SupportThreadStatus;
+  trademarkMatchId: string | null;
+  readonly createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportMessageRecord {
+  readonly id: string;
+  readonly threadId: string;
+  readonly participantId: string;
+  body: string;
+  readonly createdAt: string;
+}
+
+export interface SupportParticipantRecord {
+  readonly id: string;
+  readonly threadId: string;
+  participantType: 'customer_user' | 'platform_operator' | 'external_firm';
+  displayName: string;
+  actorUserId: string | null;
+  readonly joinedAt: string;
+}
+
+export interface ChatThreadDetail {
+  readonly thread: SupportThreadRecord;
+  readonly messages: readonly SupportMessageRecord[];
+  readonly participants: readonly SupportParticipantRecord[];
+}
+
+export interface PlatformChatThreadRecord extends SupportThreadRecord {
+  readonly messageCount: number;
+  readonly organizationName: string;
+}
+
+export interface UpdatePlanCatalogInput {
+  readonly displayNameNl?: string;
+  readonly priceMonthlyCents?: number;
+  readonly maxWatchedTrademarks?: number;
+  readonly maxNotificationEmails?: number;
+  readonly supportTier?: SupportTier;
+  readonly features?: Partial<Record<FeatureFlag, boolean>>;
 }

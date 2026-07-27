@@ -1,13 +1,24 @@
-import type { MatchStatus } from '@merkwacht/domain';
+import type { MatchQueue, MatchStatus } from '@merkwacht/domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
-import { type MaybeRefOrGetter, toValue } from 'vue';
+import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { apiRequest, apiResourceUrl } from './client';
 import { queryKeys } from './keys';
 import type { MatchNoteRecord, TrademarkMatchRecord } from './types';
 
-async function fetchMatches(status?: MatchStatus): Promise<readonly TrademarkMatchRecord[]> {
+export type MatchListParams = {
+  status?: MatchStatus;
+  queue?: MatchQueue;
+};
+
+function listScope(params?: MatchListParams): string {
+  if (params?.queue) return `queue:${params.queue}`;
+  if (params?.status) return `status:${params.status}`;
+  return 'ALL';
+}
+
+async function fetchMatches(params?: MatchListParams): Promise<readonly TrademarkMatchRecord[]> {
   const { matches } = await apiRequest<{ matches: readonly TrademarkMatchRecord[] }>('/api/v1/matches', {
-    query: { status },
+    query: params?.queue ? { queue: params.queue } : params?.status ? { status: params.status } : undefined,
   });
   return matches;
 }
@@ -17,10 +28,10 @@ async function fetchMatch(id: string): Promise<TrademarkMatchRecord> {
   return match;
 }
 
-export function useMatches(status?: MaybeRefOrGetter<MatchStatus | undefined>) {
+export function useMatches(params?: MaybeRefOrGetter<MatchListParams | undefined>) {
   return useQuery({
-    queryKey: queryKeys.matches.all(status ? toValue(status) : undefined),
-    queryFn: () => fetchMatches(status ? toValue(status) : undefined),
+    queryKey: computed(() => queryKeys.matches.all(listScope(toValue(params)))),
+    queryFn: () => fetchMatches(toValue(params)),
   });
 }
 
@@ -52,6 +63,36 @@ export function useUpdateMatchStatus() {
   });
 }
 
+export function useAcceptMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<{ match: TrademarkMatchRecord }>(`/api/v1/matches/${id}/accept`, { method: 'POST' }),
+    onSuccess: (_data, id) => invalidateMatch(queryClient, id),
+  });
+}
+
+export function useRejectMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      apiRequest<{ match: TrademarkMatchRecord }>(`/api/v1/matches/${id}/reject`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: (_data, variables) => invalidateMatch(queryClient, variables.id),
+  });
+}
+
+export function useArchiveMatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<{ match: TrademarkMatchRecord }>(`/api/v1/matches/${id}/archive`, { method: 'POST' }),
+    onSuccess: (_data, id) => invalidateMatch(queryClient, id),
+  });
+}
+
 export function useAddMatchNote() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -73,15 +114,24 @@ export function useRequestAdvisorReview() {
   });
 }
 
-export function matchExportUrl(id: string, format: 'csv' | 'html'): string {
+export function matchExportUrl(id: string, format: 'csv' | 'html' | 'pdf'): string {
   return apiResourceUrl(`/api/v1/matches/${id}/export`, { format });
 }
 
 export const MATCH_STATUS_LABELS_NL: Readonly<Record<MatchStatus, string>> = {
   new: 'Nieuw',
-  under_review: 'In behandeling',
-  confirmed_conflict: 'Relevant',
+  under_review: 'Actief',
+  confirmed_conflict: 'Actief',
   dismissed: 'Niet relevant',
   opposition_filed: 'Oppositie ingediend',
   opposition_deadline_passed: 'Termijn verstreken',
 };
+
+export const MATCH_QUEUE_LABELS_NL: Readonly<Record<MatchQueue, string>> = {
+  possible: 'Mogelijke matches',
+  active: 'Actieve matches',
+  archived: 'Matcharchief',
+};
+
+export { ARCHIVED_MATCH_STATUSES, ACTIVE_MATCH_STATUSES, POSSIBLE_MATCH_STATUSES } from '@merkwacht/domain';
+export type { MatchQueue } from '@merkwacht/domain';

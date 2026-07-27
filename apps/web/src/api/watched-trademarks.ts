@@ -63,7 +63,14 @@ export function useCreateWatchedTrademark() {
 export function useUpdateWatchedTrademarkSettings(id: MaybeRefOrGetter<string>) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (patch: { label?: string; notes?: string | null }) =>
+    mutationFn: (patch: {
+      label?: string;
+      notes?: string | null;
+      minScoreThreshold?: number;
+      classMode?: 'eigen' | 'custom' | 'all';
+      selectedNiceClasses?: readonly number[];
+      watchedRegisters?: readonly string[];
+    }) =>
       apiRequest<{ watchedTrademark: WatchedTrademarkRecord }>(`/api/v1/watched-trademarks/${toValue(id)}/settings`, {
         method: 'PATCH',
         body: patch,

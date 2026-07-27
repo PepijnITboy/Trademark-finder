@@ -33,6 +33,7 @@
     "@merkwacht/shared": "workspace:*",
     "@merkwacht/validation": "workspace:*",
     "fastify": "^5.2.0",
+    "stripe": "^22.3.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {

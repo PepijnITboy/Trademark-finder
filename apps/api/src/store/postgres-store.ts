@@ -161,7 +161,34 @@ export class PostgresStore implements AppStore {
       .select('*')
       .maybeSingle();
     throwOnError(error, 'watched-merk instellingen bijwerken');
-    return data ? rowToWatchedTrademark(data) : null;
+    if (!data) return null;
+
+    if (
+      patch.minScoreThreshold !== undefined ||
+      patch.classMode !== undefined ||
+      patch.selectedNiceClasses !== undefined ||
+      patch.watchedRegisters !== undefined
+    ) {
+      const settingsUpdate: Record<string, unknown> = {
+        watched_trademark_id: id,
+        updated_at: new Date().toISOString(),
+      };
+      if (patch.minScoreThreshold !== undefined) settingsUpdate['min_score_threshold'] = patch.minScoreThreshold;
+      if (patch.classMode !== undefined) settingsUpdate['class_mode'] = patch.classMode;
+      if (patch.selectedNiceClasses !== undefined) {
+        settingsUpdate['selected_nice_classes'] = patch.selectedNiceClasses;
+      }
+      if (patch.watchedRegisters !== undefined) {
+        settingsUpdate['watched_registers'] = patch.watchedRegisters;
+      }
+      try {
+        await table(this.client, 'watch_settings').upsert(settingsUpdate);
+      } catch {
+        // Best-effort: older schemas may lack watched_registers / class_mode.
+      }
+    }
+
+    return rowToWatchedTrademark(data);
   }
 
   async setWatchedTrademarkStatus(
@@ -331,6 +358,7 @@ function isConnectionError(error: { message?: string; code?: string }): boolean 
 }
 
 function rowToWatchedTrademark(row: Record<string, unknown>): WatchedTrademarkRecord {
+  const niceClasses = (row['nice_classes'] as number[]) ?? [];
   return {
     id: String(row['id']),
     organizationId: String(row['organization_id']),
@@ -340,8 +368,14 @@ function rowToWatchedTrademark(row: Record<string, unknown>): WatchedTrademarkRe
     registryCode: String(row['registry_code']),
     registrationNumber: String(row['registration_number']),
     markText: String(row['mark_text']),
-    niceClasses: (row['nice_classes'] as number[]) ?? [],
+    niceClasses,
     eligibility: row['eligibility'] as WatchedTrademarkRecord['eligibility'],
+    watchSettings: {
+      minScoreThreshold: Number(row['min_score_threshold'] ?? 25),
+      classMode: (row['class_mode'] as 'eigen' | 'custom' | 'all') ?? 'eigen',
+      selectedNiceClasses: (row['selected_nice_classes'] as number[]) ?? niceClasses,
+      watchedRegisters: (row['watched_registers'] as string[]) ?? [String(row['registry_code'])],
+    },
     createdAt: String(row['created_at']),
     updatedAt: String(row['updated_at']),
   };

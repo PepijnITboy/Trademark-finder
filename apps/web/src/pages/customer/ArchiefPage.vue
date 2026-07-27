@@ -1,63 +1,68 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import DataTable, { type DataTableColumn } from '../../components/DataTable.vue';
-import PageHeader from '../../components/PageHeader.vue';
+import MwCard from '../../components/MwCard.vue';
+import MwPage from '../../components/MwPage.vue';
 import StatusBadge from '../../components/StatusBadge.vue';
 import { useArchive } from '../../api/archive';
-import { formatDate, formatNiceClasses } from '../../lib/format';
-import type { TrademarkMatchRecord, WatchedTrademarkRecord } from '../../api/types';
+import {
+  formatDate,
+  formatDaysOverdue,
+  formatMatchScorePercent,
+  overdueSeverity,
+} from '../../lib/format';
+import type { TrademarkMatchRecord } from '../../api/types';
 
 const router = useRouter();
 const archiveQuery = useArchive();
 
-const watchedColumns: readonly DataTableColumn<WatchedTrademarkRecord>[] = [
-  { key: 'label', label: 'Merk' },
-  { key: 'registryCode', label: 'Register', width: '8rem' },
-  { key: 'niceClasses', label: 'Nice-klassen', width: '10rem' },
-  { key: 'updatedAt', label: 'Gearchiveerd op', width: '10rem' },
-];
+const dismissed = computed(() =>
+  (archiveQuery.data.value?.matches ?? []).filter((m) => m.status === 'dismissed'),
+);
+const expired = computed(() =>
+  (archiveQuery.data.value?.matches ?? []).filter((m) => m.status === 'opposition_deadline_passed'),
+);
 
 const matchColumns: readonly DataTableColumn<TrademarkMatchRecord>[] = [
-  { key: 'candidate', label: 'Kandidaat-aanvraag' },
-  { key: 'watched', label: 'Bewaakt merk' },
+  { key: 'watched', label: 'Eigenmerk' },
+  { key: 'candidate', label: 'Match gevonden' },
   { key: 'score', label: 'Score', align: 'right', width: '6rem' },
   { key: 'updatedAt', label: 'Afgehandeld op', width: '10rem' },
 ];
 
-function goToWatched(record: WatchedTrademarkRecord): void {
-  void router.push({ name: 'app-watched-trademark-detail', params: { id: record.id } });
+const expiredColumns: readonly DataTableColumn<TrademarkMatchRecord>[] = [
+  { key: 'watched', label: 'Eigenmerk' },
+  { key: 'candidate', label: 'Match gevonden' },
+  { key: 'overdue', label: 'Verstreken', width: '12rem' },
+  { key: 'score', label: 'Score', align: 'right', width: '6rem' },
+];
+
+function daysOverdue(match: TrademarkMatchRecord): number {
+  const deadline = match.candidate.oppositionDeadline?.deadlineDate;
+  if (!deadline) return 0;
+  return Math.max(0, Math.ceil((Date.now() - new Date(deadline).getTime()) / (1000 * 60 * 60 * 24)));
 }
+
+function severityTone(days: number): 'warning' | 'danger' | 'neutral' {
+  const sev = overdueSeverity(days);
+  if (sev === 'mild') return 'warning';
+  if (sev === 'moderate') return 'danger';
+  return 'danger';
+}
+
 function goToMatch(record: TrademarkMatchRecord): void {
   void router.push({ name: 'app-match-detail', params: { id: record.id } });
 }
 </script>
 
 <template>
-  <div class="space-y-8">
-    <PageHeader title="Archief" description="Gearchiveerde merken en als niet-relevant afgehandelde matches." />
-
-    <section class="space-y-3">
-      <h2 class="text-sm font-semibold text-text">Gearchiveerde merken</h2>
+  <MwPage title="Matcharchief" description="Niet-relevante matches en verstreken oppositietermijnen.">
+    <MwCard title="Niet-relevante matches" :padding="false">
       <DataTable
-        :columns="watchedColumns"
-        :rows="archiveQuery.data.value?.watchedTrademarks ?? []"
-        :row-key="(row) => row.id"
-        :loading="archiveQuery.isLoading.value"
-        clickable-rows
-        empty-title="Geen gearchiveerde merken"
-        empty-description="Merken die u archiveert, verschijnen hier ter referentie."
-        @row-click="goToWatched"
-      >
-        <template #cell-niceClasses="{ row }">{{ formatNiceClasses(row.niceClasses) }}</template>
-        <template #cell-updatedAt="{ row }">{{ formatDate(row.updatedAt) }}</template>
-      </DataTable>
-    </section>
-
-    <section class="space-y-3">
-      <h2 class="text-sm font-semibold text-text">Niet-relevante matches</h2>
-      <DataTable
+        embedded
         :columns="matchColumns"
-        :rows="archiveQuery.data.value?.matches ?? []"
+        :rows="dismissed"
         :row-key="(row) => row.id"
         :loading="archiveQuery.isLoading.value"
         clickable-rows
@@ -65,14 +70,40 @@ function goToMatch(record: TrademarkMatchRecord): void {
         empty-description="Matches die u als niet relevant markeert, verschijnen hier."
         @row-click="goToMatch"
       >
+        <template #cell-watched="{ row }">{{ row.watchedTrademarkLabel }}</template>
         <template #cell-candidate="{ row }">
           <span class="font-medium">{{ row.candidate.markText }}</span>
           <StatusBadge label="Niet relevant" tone="neutral" class="ml-2" />
         </template>
-        <template #cell-watched="{ row }">{{ row.watchedTrademarkLabel }}</template>
-        <template #cell-score="{ row }">{{ row.totalScore }}</template>
+        <template #cell-score="{ row }">{{ formatMatchScorePercent(row.totalScore) }}</template>
         <template #cell-updatedAt="{ row }">{{ formatDate(row.updatedAt) }}</template>
       </DataTable>
-    </section>
-  </div>
+    </MwCard>
+
+    <MwCard title="Verstreken oppositietermijn" :padding="false">
+      <DataTable
+        embedded
+        :columns="expiredColumns"
+        :rows="expired"
+        :row-key="(row) => row.id"
+        :loading="archiveQuery.isLoading.value"
+        clickable-rows
+        empty-title="Geen verstreken termijnen"
+        empty-description="Matches waarvan de oppositietermijn is verstreken, verschijnen hier."
+        @row-click="goToMatch"
+      >
+        <template #cell-watched="{ row }">{{ row.watchedTrademarkLabel }}</template>
+        <template #cell-candidate="{ row }">
+          <span class="font-medium">{{ row.candidate.markText }}</span>
+        </template>
+        <template #cell-overdue="{ row }">
+          <StatusBadge
+            :label="formatDaysOverdue(daysOverdue(row))"
+            :tone="severityTone(daysOverdue(row))"
+          />
+        </template>
+        <template #cell-score="{ row }">{{ formatMatchScorePercent(row.totalScore) }}</template>
+      </DataTable>
+    </MwCard>
+  </MwPage>
 </template>

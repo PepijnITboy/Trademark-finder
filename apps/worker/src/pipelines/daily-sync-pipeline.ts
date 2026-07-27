@@ -4,6 +4,7 @@ import { refreshMissingOppositionDeadlines } from './deadlines.js';
 import { buildMatchJobIdempotencyKey } from './idempotency.js';
 import { ingestConnectorBatch } from './ingest-candidates.js';
 import { runQueuedMatchJobs } from './match-and-score.js';
+import { isWithinOppositionWindow } from './opposition-candidates.js';
 import { getConnector, type PipelineContext } from './types.js';
 
 export interface DailySyncPipelineOptions {
@@ -94,9 +95,11 @@ export async function runDailySyncPipeline(
       .filter((watched) => watched.snapshot.registryCode === options.registryCode);
 
     let enqueuedCount = 0;
+    const now = new Date();
     for (const candidateId of changedCandidateIds) {
       const stored = context.jobStore.getCandidateApplication(candidateId);
       if (!stored) continue;
+      if (!isWithinOppositionWindow(stored.application, now)) continue;
       for (const watched of watchedTrademarks) {
         const idempotencyKey = buildMatchJobIdempotencyKey(watched.id, candidateId, stored.sourceHash);
         if (context.jobStore.enqueueMatchJob(watched.id, candidateId, idempotencyKey)) {

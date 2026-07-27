@@ -6,12 +6,12 @@ withDefaults(
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-surface p-4">
-    <p class="text-xs font-medium uppercase tracking-wide text-text-muted">{{ label }}</p>
-    <div v-if="loading" class="mt-2 h-7 w-16 animate-pulse rounded bg-surface-muted" />
+  <div class="rounded-lg border border-border bg-surface p-4 shadow-sm">
+    <p class="text-xs font-medium text-text-muted">{{ label }}</p>
+    <div v-if="loading" class="mt-2 h-8 w-16 animate-pulse rounded bg-surface-muted" />
     <p
       v-else
-      class="mt-1 text-2xl font-semibold tabular-nums"
+      class="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight"
       :class="{ 'text-danger': tone === 'danger', 'text-warning': tone === 'warning', 'text-text': tone === 'neutral' }"
     >
       {{ value }}

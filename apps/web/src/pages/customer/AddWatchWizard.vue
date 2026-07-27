@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import PageHeader from '../../components/PageHeader.vue';
+import MwButton from '../../components/MwButton.vue';
+import MwCard from '../../components/MwCard.vue';
+import MwPage from '../../components/MwPage.vue';
 import { ApiError } from '../../api/client';
 import { useCreateWatchedTrademark, useLookupWatchedTrademark } from '../../api/watched-trademarks';
+import { useToastStore } from '../../stores/toast';
 import type { LookupCandidate } from '../../api/types';
 import Step1Register from './wizard/Step1Register.vue';
 import Step2Number from './wizard/Step2Number.vue';
@@ -17,6 +20,7 @@ import WizardSteps from './wizard/WizardSteps.vue';
 const STEP_LABELS = ['Register', 'Nummer', 'Ophalen', 'Voorbeeld', 'Geschiktheid', 'Instellingen', 'Bevestigen'];
 
 const router = useRouter();
+const toast = useToastStore();
 const step = ref(1);
 const registryCode = ref<string | null>(null);
 const registrationNumber = ref('');
@@ -66,20 +70,25 @@ async function confirmCreate(): Promise<void> {
       registryCode: lookupResult.value.registryCode,
       registrationNumber: lookupResult.value.registrationNumber,
     });
+    toast.success('Bewaakt merk toegevoegd');
     void router.push({ name: 'app-watched-trademark-detail', params: { id: watchedTrademark.id } });
   } catch (error) {
     submitErrorMessage.value =
       error instanceof ApiError ? error.message : 'Het toevoegen van het merk is mislukt. Probeer het opnieuw.';
+    toast.error(submitErrorMessage.value);
   }
 }
 </script>
 
 <template>
-  <div class="max-w-3xl space-y-6">
-    <PageHeader title="Merk toevoegen" description="Voeg een geregistreerd merk toe voor automatische bewaking." />
+  <MwPage title="Merk toevoegen" description="Voeg een geregistreerd merk toe voor automatische bewaking.">
+    <template #actions>
+      <MwButton variant="tertiary" @click="cancel">Annuleren</MwButton>
+    </template>
+
     <WizardSteps :current="step" :labels="STEP_LABELS" />
 
-    <div class="rounded-lg border border-border bg-surface p-6">
+    <MwCard>
       <Step1Register
         v-if="step === 1"
         v-model="registryCode"
@@ -125,6 +134,6 @@ async function confirmCreate(): Promise<void> {
         @confirm="confirmCreate"
         @back="step = 6"
       />
-    </div>
-  </div>
+    </MwCard>
+  </MwPage>
 </template>

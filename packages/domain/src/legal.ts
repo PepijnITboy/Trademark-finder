@@ -13,6 +13,16 @@ export const LEGAL_DISCLAIMER_NL =
   'oppositie.';
 
 /**
+ * Mandatory disclaimer for Merkonderzoek (pre-filing clearance) surfaces.
+ */
+export const NAME_RESEARCH_DISCLAIMER_NL =
+  'Dit merkonderzoek is een geautomatiseerde signalering op basis van ' +
+  'openbare registergegevens. Het vormt geen juridisch advies, geen ' +
+  'beoordeling van registreerbaarheid en geen garantie op succesvolle ' +
+  'registratie. Raadpleeg een merkengemachtigde of advocaat voordat u een ' +
+  'merk aanvraagt of gebruikt.';
+
+/**
  * Phrases that must never appear in customer-facing text (UI copy, e-mail
  * templates, exports, or AI-generated rationale shown to customers) because
  * they imply a legal determination or action Merkwacht does not make/take.

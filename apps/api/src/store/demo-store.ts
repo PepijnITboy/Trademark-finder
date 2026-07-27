@@ -73,6 +73,12 @@ export class DemoStore implements AppStore {
       markText: input.markText,
       niceClasses: input.niceClasses,
       eligibility: input.eligibility,
+      watchSettings: {
+        minScoreThreshold: 25,
+        classMode: 'eigen',
+        selectedNiceClasses: [...input.niceClasses],
+        watchedRegisters: [input.registryCode],
+      },
       createdAt: now,
       updatedAt: now,
     };
@@ -91,6 +97,18 @@ export class DemoStore implements AppStore {
       ...existing,
       label: patch.label ?? existing.label,
       notes: patch.notes === undefined ? existing.notes : patch.notes,
+      watchSettings: {
+        minScoreThreshold: patch.minScoreThreshold ?? existing.watchSettings.minScoreThreshold,
+        classMode: patch.classMode ?? existing.watchSettings.classMode,
+        selectedNiceClasses:
+          patch.selectedNiceClasses !== undefined
+            ? [...patch.selectedNiceClasses]
+            : existing.watchSettings.selectedNiceClasses,
+        watchedRegisters:
+          patch.watchedRegisters !== undefined
+            ? [...patch.watchedRegisters]
+            : existing.watchSettings.watchedRegisters,
+      },
       updatedAt: new Date().toISOString(),
     };
     this.watchedTrademarks.set(id, updated);

@@ -1,5 +1,6 @@
 import { buildMatchJobIdempotencyKey } from '../pipelines/idempotency.js';
 import { runQueuedMatchJobs } from '../pipelines/match-and-score.js';
+import { isWithinOppositionWindow } from '../pipelines/opposition-candidates.js';
 import type { JobContext } from './register-sync.js';
 
 export interface MatchCandidateBatchPayload {
@@ -25,9 +26,11 @@ export async function handleMatchCandidateBatch(
   const watchedTrademarks = context.jobStore
     .listActiveEligibleWatchedTrademarks()
     .filter((watched) => watched.snapshot.registryCode === payload.registryCode);
+  const now = new Date();
   const candidates = context.jobStore
     .listCandidateApplications()
-    .filter((stored) => stored.application.registryCode === payload.registryCode);
+    .filter((stored) => stored.application.registryCode === payload.registryCode)
+    .filter((stored) => isWithinOppositionWindow(stored.application, now));
 
   let enqueuedCount = 0;
   for (const watched of watchedTrademarks) {

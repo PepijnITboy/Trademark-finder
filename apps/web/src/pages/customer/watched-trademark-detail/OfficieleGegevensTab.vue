@@ -21,7 +21,7 @@ defineProps<{ watched: WatchedTrademarkRecord }>();
         <dd class="mt-1 text-sm text-text">{{ watched.registryCode }}</dd>
       </div>
       <div>
-        <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Registratienummer</dt>
+        <dt class="text-xs font-medium uppercase tracking-wide text-text-muted">Depotnummer</dt>
         <dd class="mt-1 text-sm text-text">{{ watched.registrationNumber }}</dd>
       </div>
       <div>

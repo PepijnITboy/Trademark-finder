@@ -8,7 +8,7 @@ defineProps<{ watched: WatchedTrademarkRecord | undefined; match: TrademarkMatch
 <template>
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
     <div class="rounded-lg border border-border bg-surface p-5">
-      <p class="text-xs font-semibold uppercase tracking-wide text-accent-strong">Bewaakt ouder merk</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-accent-strong">Eigenmerk</p>
       <p class="mt-2 text-lg font-semibold text-text">{{ match.watchedTrademarkLabel }}</p>
       <p v-if="watched" class="text-sm text-text-muted">{{ watched.markText }}</p>
       <dl class="mt-4 space-y-2 text-sm">
@@ -24,7 +24,7 @@ defineProps<{ watched: WatchedTrademarkRecord | undefined; match: TrademarkMatch
     </div>
 
     <div class="rounded-lg border border-border bg-surface p-5">
-      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Nieuwere kandidaat-aanvraag</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Match gevonden</p>
       <p class="mt-2 text-lg font-semibold text-text">{{ match.candidate.markText }}</p>
       <p class="text-sm text-text-muted">{{ match.candidate.applicantName }}</p>
       <dl class="mt-4 space-y-2 text-sm">

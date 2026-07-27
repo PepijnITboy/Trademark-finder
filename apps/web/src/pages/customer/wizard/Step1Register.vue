@@ -46,9 +46,6 @@ function select(code: string, available: boolean): void {
       </button>
     </div>
     <div class="flex justify-end gap-2 border-t border-border pt-4">
-      <button type="button" class="rounded-md border border-border px-3.5 py-2 text-sm font-medium text-text hover:bg-surface-muted" @click="emit('cancel')">
-        Annuleren
-      </button>
       <button
         type="button"
         class="rounded-md bg-accent-strong px-3.5 py-2 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"

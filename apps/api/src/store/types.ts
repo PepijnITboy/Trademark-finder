@@ -8,6 +8,15 @@ import type {
 } from '@merkwacht/domain';
 import type { DigestFrequency } from '@merkwacht/validation';
 
+export interface WatchedTrademarkWatchSettings {
+  readonly minScoreThreshold: number;
+  /** eigen = registration classes; custom = selectedNiceClasses; all = every class */
+  readonly classMode: 'eigen' | 'custom' | 'all';
+  readonly selectedNiceClasses: readonly number[];
+  /** Registers to monitor; only BOIP is live today. */
+  readonly watchedRegisters: readonly string[];
+}
+
 /** A watched trademark as persisted/returned by the API. Mirrors `@merkwacht/domain`'s `WatchedTrademark`, scoped to an organization. */
 export interface WatchedTrademarkRecord {
   readonly id: string;
@@ -20,6 +29,7 @@ export interface WatchedTrademarkRecord {
   readonly markText: string;
   readonly niceClasses: readonly number[];
   readonly eligibility: WatchEligibilityDecision;
+  readonly watchSettings: WatchedTrademarkWatchSettings;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -37,6 +47,10 @@ export interface CreateWatchedTrademarkRecordInput {
 export interface UpdateWatchedTrademarkSettingsInput {
   readonly label?: string | undefined;
   readonly notes?: string | null | undefined;
+  readonly minScoreThreshold?: number | undefined;
+  readonly classMode?: 'eigen' | 'custom' | 'all' | undefined;
+  readonly selectedNiceClasses?: readonly number[] | undefined;
+  readonly watchedRegisters?: readonly string[] | undefined;
 }
 
 /** A single free-text reviewer note attached to a match. */

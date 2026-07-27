@@ -24,6 +24,7 @@ De volgende (of een functioneel identieke) tekst moet zichtbaar zijn:
 1. Onderaan elk klantdashboard-scherm dat `trademark_match`-resultaten toont.
 2. In elke e-mailnotificatie die een match of oppositietermijn meldt.
 3. Op elke PDF/CSV-export.
+4. Op elke Merkonderzoek-wizard-, lijst- en rapportpagina (extra: `NAME_RESEARCH_DISCLAIMER_NL`).
 
 ```
 LEGAL_DISCLAIMER_NL:
@@ -35,10 +36,17 @@ verwarringsgevaar. Raadpleeg een merkengemachtigde of advocaat voordat u
 actie onderneemt, waaronder het al dan niet indienen van een oppositie."
 ```
 
-Deze exacte tekst is vastgelegd als `LEGAL_DISCLAIMER_NL` in
-`packages/domain/src/legal.ts` zodat er precies één bron van waarheid is —
-UI, e-mail, en exports importeren deze constante in plaats van de tekst te
-herschrijven.
+```
+NAME_RESEARCH_DISCLAIMER_NL:
+
+"Dit merkonderzoek is een geautomatiseerde signalering op basis van
+openbare registergegevens. Het vormt geen juridisch advies, geen
+beoordeling van registreerbaarheid en geen garantie op succesvolle
+registratie. Raadpleeg een merkengemachtigde of advocaat voordat u een
+merk aanvraagt of gebruikt."
+```
+
+Deze exacte teksten zijn vastgelegd in `packages/domain/src/legal.ts`.
 
 ## Verboden woorden en frasen
 

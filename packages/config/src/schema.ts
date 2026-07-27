@@ -25,6 +25,9 @@ export const apiEnvSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === 'true'),
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  STRIPE_PRICE_IDS: z.string().optional(),
 });
 export type ApiEnv = z.infer<typeof apiEnvSchema>;
 

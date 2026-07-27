@@ -1,3 +1,4 @@
+import { isDeadlineEligibleStatus } from '@merkwacht/domain';
 import type { FastifyInstance } from 'fastify';
 
 function daysBetween(fromIso: string, toIso: string): number {
@@ -7,11 +8,7 @@ function daysBetween(fromIso: string, toIso: string): number {
 }
 
 /**
- * `/api/v1/deadlines` - upcoming opposition-filing deadlines, derived from
- * each org's matches' `candidate.oppositionDeadline` (see
- * `@merkwacht/opposition-rules` and `docs/domain/opposition-workflow.md`).
- * Read-only: deadlines themselves are calculated by the worker's
- * `calculate_opposition_deadlines` job, never by the API.
+ * `/api/v1/deadlines` - upcoming opposition-filing deadlines for **actieve** matches only.
  */
 export async function registerDeadlineRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async () => {
@@ -20,7 +17,7 @@ export async function registerDeadlineRoutes(app: FastifyInstance): Promise<void
     const now = new Date().toISOString();
 
     const deadlines = matches
-      .filter((match) => match.candidate.oppositionDeadline !== null)
+      .filter((match) => isDeadlineEligibleStatus(match.status) && match.candidate.oppositionDeadline !== null)
       .map((match) => {
         const deadline = match.candidate.oppositionDeadline;
         return {
@@ -33,6 +30,7 @@ export async function registerDeadlineRoutes(app: FastifyInstance): Promise<void
           daysRemaining: deadline ? daysBetween(now, deadline.deadlineDate) : null,
         };
       })
+      .filter((entry) => entry.daysRemaining === null || entry.daysRemaining >= 0)
       .sort((a, b) => (a.deadline?.deadlineDate ?? '').localeCompare(b.deadline?.deadlineDate ?? ''));
 
     return { deadlines };

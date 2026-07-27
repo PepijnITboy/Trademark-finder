@@ -3,7 +3,10 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import DeadlineIndicator from '../../components/DeadlineIndicator.vue';
 import EmptyState from '../../components/EmptyState.vue';
-import PageHeader from '../../components/PageHeader.vue';
+import MwBanner from '../../components/MwBanner.vue';
+import MwCard from '../../components/MwCard.vue';
+import MwPage from '../../components/MwPage.vue';
+import MwTooltip from '../../components/MwTooltip.vue';
 import SkeletonBlock from '../../components/SkeletonBlock.vue';
 import { useDeadlines } from '../../api/deadlines';
 import { formatDate } from '../../lib/format';
@@ -32,8 +35,13 @@ function goToMatch(matchId: string): void {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <PageHeader title="Deadlines" description="Openstaande oppositietermijnen, gegroepeerd naar urgentie." />
+  <MwPage
+    title="Oppositiedeadlines"
+    description="Alleen termijnen die nog open staan — verstreken termijnen staan in het matcharchief."
+  >
+    <MwBanner tone="info" title="Bron van de termijn">
+      Termijnen komen uit de registerpublicatie van de gevonden match. Controleer altijd de officiële bron bij twijfel.
+    </MwBanner>
 
     <div v-if="deadlinesQuery.isLoading.value" class="space-y-3">
       <SkeletonBlock height="3rem" />
@@ -47,30 +55,34 @@ function goToMatch(matchId: string): void {
       description="Zodra matches met een berekende oppositietermijn worden gesignaleerd, verschijnen ze hier."
     />
 
-    <section v-for="bucket in grouped" :key="bucket.key" class="space-y-3">
-      <h2 class="text-sm font-semibold text-text">{{ bucket.labelNl }}</h2>
-      <div class="overflow-hidden rounded-lg border border-border bg-surface">
-        <ul class="divide-y divide-border">
-          <li v-for="entry in bucket.entries" :key="entry.matchId">
-            <button
-              type="button"
-              class="flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm hover:bg-surface-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
-              @click="goToMatch(entry.matchId)"
-            >
-              <div class="min-w-0">
-                <p class="truncate font-medium text-text">{{ entry.candidateMarkText }}</p>
-                <p class="truncate text-xs text-text-muted">
-                  vs. {{ entry.watchedTrademarkLabel }} · {{ entry.registryCode }}
-                </p>
-              </div>
-              <div class="flex shrink-0 items-center gap-4">
+    <MwCard
+      v-for="bucket in grouped"
+      :key="bucket.key"
+      :title="bucket.labelNl"
+      :padding="false"
+    >
+      <ul class="divide-y divide-border">
+        <li v-for="entry in bucket.entries" :key="entry.matchId">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between gap-4 px-5 py-3.5 text-left text-sm hover:bg-surface-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            @click="goToMatch(entry.matchId)"
+          >
+            <div class="min-w-0">
+              <p class="truncate font-medium text-text">{{ entry.candidateMarkText }}</p>
+              <p class="truncate text-xs text-text-muted">
+                Eigenmerk: {{ entry.watchedTrademarkLabel }} · {{ entry.registryCode }}
+              </p>
+            </div>
+            <div class="flex shrink-0 items-center gap-4">
+              <MwTooltip text="Oppositietermijn volgens registerpublicatie">
                 <span class="text-xs text-text-muted">{{ formatDate(entry.deadline?.deadlineDate) }}</span>
-                <DeadlineIndicator :days-remaining="entry.daysRemaining" />
-              </div>
-            </button>
-          </li>
-        </ul>
-      </div>
-    </section>
-  </div>
+              </MwTooltip>
+              <DeadlineIndicator :days-remaining="entry.daysRemaining" />
+            </div>
+          </button>
+        </li>
+      </ul>
+    </MwCard>
+  </MwPage>
 </template>

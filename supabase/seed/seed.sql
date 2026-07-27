@@ -77,26 +77,30 @@ values (
 );
 
 -- ---------------------------------------------------------------------
--- Billing: Starter plan + entitlements + workspace subscription
+-- Billing: five-plan catalog (seed starter for demo workspace)
 -- ---------------------------------------------------------------------
 
-insert into public.subscription_plans (id, code, name, price_eur_cents, max_watched_trademarks)
-values (
-  '00000000-0000-4000-8000-000000000110',
-  'starter',
-  'Starter',
-  4900,
-  5
-);
+insert into public.subscription_plans (id, code, name, price_eur_cents, max_watched_trademarks, max_notification_emails, support_tier)
+values
+  ('00000000-0000-4000-8000-000000000110', 'starter', 'Starter', 4900, 3, 5, 'standaard'),
+  ('00000000-0000-4000-8000-000000000111', 'basis', 'Basis', 2900, 1, 2, 'basis'),
+  ('00000000-0000-4000-8000-000000000112', 'plus', 'Plus', 9900, 10, 15, 'standaard'),
+  ('00000000-0000-4000-8000-000000000113', 'pro', 'Pro', 19900, 30, 40, 'prioriteit'),
+  ('00000000-0000-4000-8000-000000000114', 'enterprise', 'Enterprise', 39900, 100, 100, 'dedicated');
 
 insert into public.subscription_plan_features (subscription_plan_id, feature_flag, enabled, limit_value)
 values
   ('00000000-0000-4000-8000-000000000110', 'email_notifications', true, null),
   ('00000000-0000-4000-8000-000000000110', 'csv_export', true, null),
   ('00000000-0000-4000-8000-000000000110', 'pdf_export', false, null),
-  ('00000000-0000-4000-8000-000000000110', 'ai_enrichment', false, null),
+  ('00000000-0000-4000-8000-000000000110', 'ai_enrichment', true, null),
   ('00000000-0000-4000-8000-000000000110', 'multi_register_watch', false, null),
-  ('00000000-0000-4000-8000-000000000110', 'platform_access', false, null);
+  ('00000000-0000-4000-8000-000000000110', 'platform_access', false, null),
+  ('00000000-0000-4000-8000-000000000110', 'merkrechten_chat', false, null),
+  ('00000000-0000-4000-8000-000000000113', 'merkrechten_chat', true, null),
+  ('00000000-0000-4000-8000-000000000113', 'pdf_export', true, null),
+  ('00000000-0000-4000-8000-000000000114', 'merkrechten_chat', true, null),
+  ('00000000-0000-4000-8000-000000000114', 'pdf_export', true, null);
 
 insert into public.workspace_subscriptions (workspace_id, subscription_plan_id, status, started_at)
 values (

@@ -9,6 +9,7 @@ import { useWatchedTrademark } from '../../api/watched-trademarks';
 import ActieveMatchesTab from './watched-trademark-detail/ActieveMatchesTab.vue';
 import BewakingsinstellingenTab from './watched-trademark-detail/BewakingsinstellingenTab.vue';
 import HistorieTab from './watched-trademark-detail/HistorieTab.vue';
+import MatchArchiefTab from './watched-trademark-detail/MatchArchiefTab.vue';
 import NotitiesTab from './watched-trademark-detail/NotitiesTab.vue';
 import OfficieleGegevensTab from './watched-trademark-detail/OfficieleGegevensTab.vue';
 import SamenvattingTab from './watched-trademark-detail/SamenvattingTab.vue';
@@ -26,6 +27,7 @@ const TABS: readonly TabItem[] = [
   { key: 'officiele-gegevens', label: 'Officiële gegevens' },
   { key: 'bewakingsinstellingen', label: 'Bewakingsinstellingen' },
   { key: 'actieve-matches', label: 'Actieve matches' },
+  { key: 'match-archief', label: 'Matcharchief' },
   { key: 'historie', label: 'Historie' },
   { key: 'notities', label: 'Notities' },
 ];
@@ -39,7 +41,7 @@ function backToList(): void {
 <template>
   <div class="space-y-6">
     <button type="button" class="text-xs font-medium text-accent-strong hover:underline" @click="backToList">
-      ← Terug naar bewaakte merken
+      ← Terug naar mijn merken
     </button>
 
     <template v-if="watchedQuery.isLoading.value">
@@ -57,6 +59,11 @@ function backToList(): void {
       <BewakingsinstellingenTab v-else-if="activeTab === 'bewakingsinstellingen'" :watched="watchedQuery.data.value" />
       <ActieveMatchesTab
         v-else-if="activeTab === 'actieve-matches'"
+        :matches="matchesForWatched"
+        :loading="matchesQuery.isLoading.value"
+      />
+      <MatchArchiefTab
+        v-else-if="activeTab === 'match-archief'"
         :matches="matchesForWatched"
         :loading="matchesQuery.isLoading.value"
       />

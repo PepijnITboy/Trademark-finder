@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export { jurisdictionSchema, niceClassSchema, watchedTrademarkCreateSchema, watchedTrademarkLookupSchema } from './watched-trademarks';
 export type { Jurisdiction, WatchedTrademarkCreateInput, WatchedTrademarkLookupInput } from './watched-trademarks';
 
@@ -14,3 +16,24 @@ export {
   proceduralStatusSchema,
 } from './candidate-application';
 export type { CandidateApplicationInputShape } from './candidate-application';
+
+export {
+  addressParseSchema,
+  changePlanSchema,
+  createChatMessageSchema,
+  createChatThreadSchema,
+  createMemberSchema,
+  kvkNumberSchema,
+  memberRoleSchema,
+  notificationRecipientSchema,
+  organizationLocaleSchema,
+  organizationProfileSchema,
+  updateMemberSchema,
+  updateNotificationRecipientSchema,
+} from './organization';
+export type { OrganizationProfileInput } from './organization';
+
+export { isValidBusinessEmail, suggestEmailFixes } from './email-smart';
+
+/** Re-export zod for consumers that already import from validation. */
+export { z };

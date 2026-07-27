@@ -287,6 +287,44 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
     },
   );
 
+  // -- Merkonderzoek register catalog + orders -----------------------------
+
+  app.get('/register-catalog', async () => {
+    return { registers: app.nameResearchStore.listCatalog() };
+  });
+
+  app.patch('/register-catalog/:code', async (request: FastifyRequest<{ Params: { code: string } }>, reply: FastifyReply) => {
+    const patchSchema = z.object({
+      displayNameNl: z.string().min(1).optional(),
+      connectorStatus: z.enum(['live', 'coming_soon', 'disabled']).optional(),
+      basePriceCents: z.number().int().min(0).optional(),
+      enabledForWatch: z.boolean().optional(),
+      enabledForNameResearch: z.boolean().optional(),
+    });
+    const parsed = patchSchema.parse(request.body);
+    const patch: Partial<{
+      displayNameNl: string;
+      connectorStatus: 'live' | 'coming_soon' | 'disabled';
+      basePriceCents: number;
+      enabledForWatch: boolean;
+      enabledForNameResearch: boolean;
+    }> = {};
+    if (parsed.displayNameNl !== undefined) patch.displayNameNl = parsed.displayNameNl;
+    if (parsed.connectorStatus !== undefined) patch.connectorStatus = parsed.connectorStatus;
+    if (parsed.basePriceCents !== undefined) patch.basePriceCents = parsed.basePriceCents;
+    if (parsed.enabledForWatch !== undefined) patch.enabledForWatch = parsed.enabledForWatch;
+    if (parsed.enabledForNameResearch !== undefined) patch.enabledForNameResearch = parsed.enabledForNameResearch;
+    const updated = app.nameResearchStore.updateCatalogEntry(request.params.code, patch);
+    if (!updated) {
+      return notFound(reply, 'REGISTER_NOT_FOUND', 'Dit register bestaat niet in de catalogus.', request.params.code);
+    }
+    return { register: updated };
+  });
+
+  app.get('/name-research', async () => {
+    return { orders: app.nameResearchStore.listAllOrders() };
+  });
+
   // -- System health --------------------------------------------------------
 
   app.get('/system-health', async () => {
