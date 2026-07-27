@@ -1,0 +1,95 @@
+/**
+ * Merkwacht design tokens.
+ *
+ * Framework-agnostic CSS custom properties. Consumers (e.g. `@merkwacht/web`)
+ * import this file once at the application root and reference the
+ * variables directly or via a Tailwind theme mapping.
+ *
+ * Theme selection is controlled by a `data-theme` attribute on `<html>`:
+ *   - `data-theme="light"` (default, also the `:root` fallback)
+ *   - `data-theme="dark"`
+ *   - `data-theme="system"` follows the OS preference via prefers-color-scheme
+ *
+ * Palette intent: a quiet, professional financial/legal SaaS look -
+ * a slightly broken white background, anthracite body text, and a
+ * desaturated blue-gray accent. No purple/AI gradients.
+ */
+
+:root {
+  color-scheme: light;
+
+  --mw-color-background: #f7f6f2;
+  --mw-color-surface: #ffffff;
+  --mw-color-surface-muted: #efede7;
+  --mw-color-border: #dedbd3;
+  --mw-color-text: #2a2d31;
+  --mw-color-text-muted: #5b5f66;
+  --mw-color-accent: #47607a;
+  --mw-color-accent-strong: #33475c;
+  --mw-color-accent-soft: #dce4ea;
+  --mw-color-success: #3a7a5d;
+  --mw-color-warning: #b8862e;
+  --mw-color-danger: #b23a3a;
+  --mw-color-info: #3a6ea5;
+
+  --mw-font-family-base: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mw-font-family-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --mw-radius-sm: 4px;
+  --mw-radius-md: 8px;
+  --mw-radius-lg: 12px;
+
+  --mw-space-1: 4px;
+  --mw-space-2: 8px;
+  --mw-space-3: 12px;
+  --mw-space-4: 16px;
+  --mw-space-6: 24px;
+  --mw-space-8: 32px;
+
+  --mw-shadow-sm: 0 1px 2px rgba(42, 45, 49, 0.06);
+  --mw-shadow-md: 0 4px 12px rgba(42, 45, 49, 0.08);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --mw-color-background: #1b1e22;
+  --mw-color-surface: #24272c;
+  --mw-color-surface-muted: #2c3036;
+  --mw-color-border: #383c42;
+  --mw-color-text: #edeef0;
+  --mw-color-text-muted: #a3a8ae;
+  --mw-color-accent: #7fa1c0;
+  --mw-color-accent-strong: #9cbbd6;
+  --mw-color-accent-soft: #2f3e4b;
+  --mw-color-success: #5fae86;
+  --mw-color-warning: #d6a94f;
+  --mw-color-danger: #d9706f;
+  --mw-color-info: #6e9bc7;
+
+  --mw-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --mw-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme='system'] {
+    color-scheme: dark;
+
+    --mw-color-background: #1b1e22;
+    --mw-color-surface: #24272c;
+    --mw-color-surface-muted: #2c3036;
+    --mw-color-border: #383c42;
+    --mw-color-text: #edeef0;
+    --mw-color-text-muted: #a3a8ae;
+    --mw-color-accent: #7fa1c0;
+    --mw-color-accent-strong: #9cbbd6;
+    --mw-color-accent-soft: #2f3e4b;
+    --mw-color-success: #5fae86;
+    --mw-color-warning: #d6a94f;
+    --mw-color-danger: #d9706f;
+    --mw-color-info: #6e9bc7;
+
+    --mw-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --mw-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+}

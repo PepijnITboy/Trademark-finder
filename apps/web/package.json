@@ -1,0 +1,37 @@
+{
+  "name": "@merkwacht/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --no-cache --passWithNoTests --exclude e2e/**",
+    "test:unit": "vitest run --no-cache --passWithNoTests --exclude e2e/**",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@merkwacht/domain": "workspace:*",
+    "@merkwacht/shared": "workspace:*",
+    "@merkwacht/ui": "workspace:*",
+    "@merkwacht/validation": "workspace:*",
+    "@tanstack/vue-query": "^5.62.7",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8",
+    "vue-tsc": "^2.2.0"
+  }
+}

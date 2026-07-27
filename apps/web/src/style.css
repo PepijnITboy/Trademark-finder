@@ -1,0 +1,17 @@
+@import '@merkwacht/ui/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  background-color: var(--mw-color-background);
+  color: var(--mw-color-text);
+  font-family: var(--mw-font-family-base);
+}

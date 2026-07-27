@@ -1,0 +1,28 @@
+## Optional, lightweight local Postgres for development without the full
+## Supabase CLI stack. Prefer `supabase start` (see supabase/) when you also
+## need Auth, Storage, or the Studio UI; use this compose file when you just
+## want a disposable Postgres instance to point `DATABASE_URL` at, e.g. for
+## running `supabase/migrations` directly with `psql`.
+##
+## Usage: docker compose up -d
+services:
+  postgres:
+    image: postgres:15
+    container_name: merkwacht-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: merkwacht
+    ports:
+      - '54322:5432'
+    volumes:
+      - merkwacht-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  merkwacht-postgres-data:

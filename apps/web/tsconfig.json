@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "types": ["vite/client"],
+    /* Vue SFC prop passing (and the DOM `fetch`/`RequestInit` typings) routinely
+     * bind optional values that are explicitly `undefined` rather than omitted,
+     * which conflicts with the workspace-wide `exactOptionalPropertyTypes`.
+     * Relaxed locally for this app only. */
+    "exactOptionalPropertyTypes": false,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

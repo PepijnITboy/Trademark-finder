@@ -1,0 +1,33 @@
+{
+  "name": "merkwacht",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @merkwacht/web --filter @merkwacht/api --filter @merkwacht/worker dev",
+    "dev:web": "pnpm --filter @merkwacht/web dev",
+    "dev:api": "pnpm --filter @merkwacht/api dev",
+    "dev:worker": "pnpm --filter @merkwacht/worker dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm -r test:unit",
+    "test:integration": "pnpm -r test:integration",
+    "test:e2e": "pnpm --filter @merkwacht/web test:e2e",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
+    "db:migrate": "supabase migration up",
+    "db:seed": "supabase db reset --local",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  }
+}

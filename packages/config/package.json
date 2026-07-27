@@ -1,0 +1,24 @@
+{
+  "name": "@merkwacht/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --no-cache --passWithNoTests",
+    "build": "echo \"@merkwacht/config: consumed as TypeScript source, no build step\"",
+    "test:unit": "vitest run --no-cache --passWithNoTests"
+  },
+  "dependencies": {
+    "@merkwacht/shared": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {}
+}
