@@ -16,4 +16,30 @@ export interface NormalizedMarkRepresentations {
   readonly significantTokens: readonly string[];
   /** Character length of `normalized`. */
   readonly length: number;
+  /** Compact form without whitespace (v2+). */
+  readonly compact?: string;
+  /** NFC / NFKC forms when v2 engine is used. */
+  readonly unicodeNfc?: string;
+  readonly unicodeNfkc?: string;
+  /** Token classifications (v2) — tokens are not silently dropped. */
+  readonly classifiedTokens?: readonly ClassifiedMarkToken[];
+}
+
+export type MarkTokenClassification =
+  | 'distinctive'
+  | 'weak'
+  | 'descriptive'
+  | 'generic'
+  | 'geographic'
+  | 'company_suffix'
+  | 'article'
+  | 'product_term'
+  | 'unknown';
+
+export interface ClassifiedMarkToken {
+  readonly raw: string;
+  readonly normalized: string;
+  readonly position: number;
+  readonly classification: MarkTokenClassification;
+  readonly confidence: number;
 }

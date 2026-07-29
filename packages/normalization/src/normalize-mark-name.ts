@@ -92,5 +92,62 @@ export function normalizeMarkName(input: string): NormalizedMarkRepresentations 
     tokens,
     significantTokens,
     length: normalized.length,
+    compact: normalized.replace(/\s+/g, ''),
+    unicodeNfc: input.normalize('NFC'),
+    unicodeNfkc: input.normalize('NFKC'),
+  };
+}
+
+const COMPANY_SUFFIXES = new Set(['bv', 'nv', 'vof', 'gmbh', 'ltd', 'llc', 'inc', 'co', 'corp', 'plc', 'sa', 'ag']);
+const ARTICLES = new Set(['de', 'het', 'the', 'a', 'an', 'der', 'die', 'das', 'le', 'la', 'el']);
+const PRODUCT_TERMS = new Set([
+  'drinks',
+  'foods',
+  'shop',
+  'group',
+  'company',
+  'international',
+  'original',
+  'premium',
+  'ginger',
+  'spritz',
+]);
+
+/**
+ * Normalization v2: keeps all tokens classified instead of silently dropping stopwords.
+ * Still produces `significantTokens` for legacy consumers (excludes company_suffix + article).
+ */
+export function normalizeMarkNameV2(input: string): NormalizedMarkRepresentations {
+  const base = normalizeMarkName(input);
+  const classifiedTokens = base.tokens.map((token, position) => {
+    let classification: import('./types.js').MarkTokenClassification = 'unknown';
+    let confidence = 0.5;
+    if (COMPANY_SUFFIXES.has(token)) {
+      classification = 'company_suffix';
+      confidence = 0.95;
+    } else if (ARTICLES.has(token)) {
+      classification = 'article';
+      confidence = 0.9;
+    } else if (PRODUCT_TERMS.has(token)) {
+      classification = 'product_term';
+      confidence = 0.7;
+    } else if (token.length >= 4) {
+      classification = 'distinctive';
+      confidence = 0.55;
+    } else {
+      classification = 'weak';
+      confidence = 0.4;
+    }
+    return { raw: token, normalized: token, position, classification, confidence };
+  });
+
+  const significantTokens = classifiedTokens
+    .filter((t) => t.classification !== 'company_suffix' && t.classification !== 'article')
+    .map((t) => t.normalized);
+
+  return {
+    ...base,
+    significantTokens,
+    classifiedTokens,
   };
 }

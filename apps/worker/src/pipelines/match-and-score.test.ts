@@ -14,21 +14,25 @@ function buildWatched(): WatchedTrademark {
     label: 'LUMARO',
     status: 'active',
     eligibility: {
-      status: 'eligible',
-      reasons: [],
+      eligible: true,
+      reasonCode: 'eligible',
+      reasonLabelNl: 'Dit merk komt in aanmerking voor bewaking.',
+      sourceStatus: 'registered',
       evaluatedAt: now,
       policyVersion: 'boip-v1',
+      warnings: [],
     },
     snapshot: {
       registryCode: 'BOIP',
       registrationNumber: 'BX-1',
       markText: 'LUMARO',
-      markType: 'WORD',
+      markType: 'word',
       niceClasses: [9],
       applicantName: 'Test',
       filingDate: '2022-01-01',
       registrationDate: '2022-06-01',
-      registerStatus: 'REGISTERED',
+      registerStatus: 'registered',
+      lastCheckedAt: now,
     },
     createdAt: now,
     updatedAt: now,
@@ -42,7 +46,7 @@ function buildCandidate(overrides: Partial<CandidateApplication> = {}): Candidat
     registryCode: 'BOIP',
     applicationNumber: 'BX-APP-1',
     markText: 'LUMAROO',
-    markType: 'WORD',
+    markType: 'word',
     niceClasses: [9],
     applicantName: 'Cand',
     filingDate: '2026-06-01',
@@ -56,6 +60,8 @@ function buildCandidate(overrides: Partial<CandidateApplication> = {}): Candidat
       ruleSet: { kind: 'months', months: 2, startsFrom: 'publication_date' },
       calculatedAt: new Date().toISOString(),
     },
+    rawPayloadRef: null,
+    fetchedAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -86,6 +92,7 @@ describe('scoreAndUpsertMatch opposition window gate', () => {
     const result = await scoreAndUpsertMatch(context, watched, candidate, new Date('2026-07-27'));
     expect(result.match).toBeNull();
     expect(result.isNew).toBe(false);
+    expect(result.dropReason).toBe('opposition_window');
     expect(context.jobStore.listTrademarkMatches()).toHaveLength(0);
   });
 

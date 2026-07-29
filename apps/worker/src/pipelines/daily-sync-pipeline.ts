@@ -1,4 +1,5 @@
 import type { ScanRunRecord } from '@merkwacht/database';
+import { FunnelAccumulator } from '@merkwacht/domain';
 import type { SourceCheckpoint } from '@merkwacht/register-connectors';
 import { refreshMissingOppositionDeadlines } from './deadlines.js';
 import { buildMatchJobIdempotencyKey } from './idempotency.js';
@@ -95,11 +96,15 @@ export async function runDailySyncPipeline(
       .filter((watched) => watched.snapshot.registryCode === options.registryCode);
 
     let enqueuedCount = 0;
+    let oppositionDropped = 0;
     const now = new Date();
     for (const candidateId of changedCandidateIds) {
       const stored = context.jobStore.getCandidateApplication(candidateId);
       if (!stored) continue;
-      if (!isWithinOppositionWindow(stored.application, now)) continue;
+      if (!isWithinOppositionWindow(stored.application, now)) {
+        oppositionDropped += 1;
+        continue;
+      }
       for (const watched of watchedTrademarks) {
         const idempotencyKey = buildMatchJobIdempotencyKey(watched.id, candidateId, stored.sourceHash);
         if (context.jobStore.enqueueMatchJob(watched.id, candidateId, idempotencyKey)) {
@@ -116,6 +121,54 @@ export async function runDailySyncPipeline(
     // -- 9. archive expired matches -----------------------------------------
     const archived = context.jobStore.archiveExpiredMatches();
 
+    const funnel = new FunnelAccumulator();
+    funnel.record('fetched', { entered: fetchedCount, passed: fetchedCount - invalidCount });
+    funnel.record('validated', {
+      entered: fetchedCount,
+      passed: fetchedCount - invalidCount,
+      reasonCodes: invalidCount > 0 ? { invalid_payload: invalidCount } : {},
+    });
+    funnel.record('changed', {
+      entered: fetchedCount - invalidCount,
+      passed: changedCount,
+      reasonCodes:
+        fetchedCount - invalidCount - changedCount > 0
+          ? { unchanged: fetchedCount - invalidCount - changedCount }
+          : {},
+    });
+    funnel.record('opposition_window', {
+      entered: changedCount,
+      passed: changedCount - oppositionDropped,
+      reasonCodes: oppositionDropped > 0 ? { out_of_window: oppositionDropped } : {},
+    });
+    funnel.record('watch_eligible', {
+      entered: watchedTrademarks.length,
+      passed: watchedTrademarks.length,
+    });
+    funnel.record('feature_scored', {
+      entered: matchJobsSummary.processed,
+      passed: matchJobsSummary.processed - matchJobsSummary.skippedMissing,
+    });
+    funnel.record('above_persist_threshold', {
+      entered: matchJobsSummary.processed,
+      passed: matchJobsSummary.matchesCreated + matchJobsSummary.matchesUpdated,
+      reasonCodes:
+        matchJobsSummary.droppedBelowThreshold > 0
+          ? { below_threshold: matchJobsSummary.droppedBelowThreshold }
+          : {},
+    });
+    funnel.record('match_upserted', {
+      entered: matchJobsSummary.matchesCreated + matchJobsSummary.matchesUpdated,
+      passed: matchJobsSummary.matchesCreated + matchJobsSummary.matchesUpdated,
+    });
+
+    const funnelSnapshot = funnel.snapshot({
+      runKind: 'register_sync',
+      registryCode: options.registryCode,
+      startedAt: scanRun.startedAt,
+      finishedAt: new Date().toISOString(),
+    });
+
     // -- 10. write scan_run result -------------------------------------------
     const finished = context.jobStore.finishScanRun(scanRun.id, {
       status: 'succeeded',
@@ -127,10 +180,13 @@ export async function runDailySyncPipeline(
         matchJobsProcessed: matchJobsSummary.processed,
         matchesCreated: matchJobsSummary.matchesCreated,
         matchesUpdated: matchJobsSummary.matchesUpdated,
+        droppedBelowThreshold: matchJobsSummary.droppedBelowThreshold,
+        oppositionDropped,
         deadlinesRefreshed,
         archivedMatches: archived.length,
         resumedFromCheckpoint: initialCheckpoint !== null,
         pagesFetched: pages,
+        funnel: funnelSnapshot,
       },
     });
 

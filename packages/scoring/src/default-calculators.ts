@@ -1,6 +1,8 @@
 import type { ScoreComponentCalculator } from './score-component-calculator.js';
 import type { ScoringContext } from './scoring-context.js';
 import { jaccardSimilarity, normalizedStringSimilarity } from './text-distance.js';
+import { calculateGoodsServicesOverlap } from './goods/goods-services-overlap.js';
+import { conceptualSimilarity } from './conceptual/lexicon.js';
 import {
   canComputeNiceClassOverlap,
   classificationSchemeForRegister,
@@ -92,15 +94,18 @@ export const visualSimilarityCalculator: ScoreComponentCalculator = {
 };
 
 /**
- * Conceptual/meaning closeness. v1 has no synonym/translation data source,
- * so this deliberately returns `0` (no signal) rather than a guessed value
- * — a real implementation (dictionary lookup, embedding similarity, or AI
- * enrichment) is future work. See `docs/scoring/overview.md`.
+ * Conceptual/meaning closeness via deterministic lexicon when enabled.
+ * Legacy default remains 0 for weight-profile parity unless flag/text forces it.
  */
 export const semanticSimilarityCalculator: ScoreComponentCalculator = {
   component: 'semanticSimilarity',
-  calculate(): number {
-    return 0;
+  calculate(context: ScoringContext): number {
+    if (context.engineFlags?.shared_comparison_engine !== true) return 0;
+    const result = conceptualSimilarity(
+      context.watchedNormalized.normalized,
+      context.candidateNormalized.normalized,
+    );
+    return Math.max(result.exactTranslation, result.synonym, result.taxonomyRelation);
   },
 };
 
@@ -123,15 +128,26 @@ export const niceClassOverlapCalculator: ScoreComponentCalculator = {
 };
 
 /**
- * Finer-grained goods/services description overlap. v1's domain model does
- * not yet capture free-text goods/services descriptions, so this
- * deliberately returns `0` rather than a guessed value pending that data
- * being available. See `docs/scoring/overview.md`.
+ * Finer-grained goods/services description overlap.
+ * When `goods_services_engine` is enabled (or goods text is present on context),
+ * uses {@link calculateGoodsServicesOverlap}. Otherwise returns 0 for legacy parity.
  */
 export const goodsServicesOverlapCalculator: ScoreComponentCalculator = {
   component: 'goodsServicesOverlap',
-  calculate(): number {
-    return 0;
+  calculate(context: ScoringContext): number {
+    const enabled =
+      context.engineFlags?.goods_services_engine === true ||
+      (context.watchedGoodsServices?.length ?? 0) > 0 ||
+      (context.candidateGoodsServices?.length ?? 0) > 0;
+    if (!enabled) return 0;
+
+    const result = calculateGoodsServicesOverlap({
+      leftEntries: context.watchedGoodsServices ?? [],
+      rightEntries: context.candidateGoodsServices ?? [],
+      leftNiceClasses: context.watched.snapshot.niceClasses,
+      rightNiceClasses: context.candidate.niceClasses,
+    });
+    return result.overallSimilarity;
   },
 };
 

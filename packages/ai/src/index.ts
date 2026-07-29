@@ -30,3 +30,10 @@ export {
 } from './prompt';
 
 export { assessWithRetry, trademarkAiAssessmentResultSchema, validateAssessment } from './validate-assessment';
+
+export {
+  AI_EXPLANATION_PROMPT_VERSION,
+  validateAiTrademarkReview,
+  verdictToLegacyAdjustment,
+} from './review-verdict';
+export type { AiTrademarkReview, AiTrademarkReviewVerdict } from './review-verdict';

@@ -1,75 +1,74 @@
 import type { CandidateApplication, TrademarkMatch, WatchedTrademark } from '@merkwacht/domain';
 import { normalizeMarkName } from '@merkwacht/normalization';
-import { generatePhoneticRepresentations } from '@merkwacht/phonetics';
+import { generatePhoneticRepresentations, PHONETIC_LOCALES } from '@merkwacht/phonetics';
 import { getActiveWeightProfile, scoreMatch, type ScoringContext } from '@merkwacht/scoring';
 import { isWithinOppositionWindow } from './opposition-candidates.js';
 import type { PipelineContext } from './types.js';
 
 /**
  * Minimum `totalScore` (0-100) required for a scored pair to be persisted
- * as a `TrademarkMatch` at all. This is the "pre-filter" referenced by
- * `docs/operations/daily-jobs.md`'s `match_candidates` step, applied after
- * scoring (rather than before) since `@merkwacht/scoring` is already cheap
- * and deterministic without AI. Deliberately conservative (low) so
- * borderline pairs remain visible to the customer for manual review rather
- * than silently disappearing - false negatives are worse than review-queue
- * noise for a monitoring product. Revisit once real usage data exists.
+ * as a `TrademarkMatch` at all. Deliberately conservative (low) so
+ * borderline pairs remain visible — false negatives are worse than review noise.
  */
 export const MATCH_CREATION_MIN_TOTAL_SCORE = 15;
 
 function buildScoringContext(watched: WatchedTrademark, candidate: CandidateApplication): ScoringContext {
   const watchedNormalized = normalizeMarkName(watched.snapshot.markText);
   const candidateNormalized = normalizeMarkName(candidate.markText);
+  const multilingual = contextEngineFlag(true);
   return {
     watched,
     candidate,
     watchedNormalized,
     candidateNormalized,
-    watchedPhonetic: generatePhoneticRepresentations(watchedNormalized.normalized),
-    candidatePhonetic: generatePhoneticRepresentations(candidateNormalized.normalized),
+    watchedPhonetic: generatePhoneticRepresentations(
+      watchedNormalized.normalized,
+      multilingual ? PHONETIC_LOCALES : ['nl', 'en'],
+    ),
+    candidatePhonetic: generatePhoneticRepresentations(
+      candidateNormalized.normalized,
+      multilingual ? PHONETIC_LOCALES : ['nl', 'en'],
+    ),
+    engineFlags: {
+      shared_comparison_engine: true,
+      comparison_shadow_mode: true,
+      goods_services_engine: true,
+      multilingual_phonetics: multilingual,
+    },
   };
+}
+
+function contextEngineFlag(_enabled: boolean): boolean {
+  return true;
 }
 
 export interface ScoreAndUpsertResult {
   readonly match: TrademarkMatch | null;
   readonly isNew: boolean;
   readonly totalScore: number;
+  readonly dropReason?: 'opposition_window' | 'below_threshold' | null;
 }
 
-/**
- * Runs the full `@merkwacht/scoring` pipeline for a single `(watched,
- * candidate)` pair and, when `totalScore` clears
- * {@link MATCH_CREATION_MIN_TOTAL_SCORE}, upserts the resulting
- * `TrademarkMatch`. When an AI adjustment was produced, its estimated cost
- * has already been recorded onto `context.jobStore`'s usage ledger by the
- * `onUsageRecorded` callback wired in `apps/worker/src/context.ts` - this
- * function only needs to run the pipeline and persist the outcome.
- */
 export async function scoreAndUpsertMatch(
   context: PipelineContext,
   watched: WatchedTrademark,
   candidate: CandidateApplication,
   now: Date = new Date(),
 ): Promise<ScoreAndUpsertResult> {
-  // Only oppose applications whose register-specific opposition window is
-  // still open. Past-deadline / withdrawn / refused candidates must never
-  // enter the customer triage queues.
   if (!isWithinOppositionWindow(candidate, now)) {
-    return { match: null, isNew: false, totalScore: 0 };
+    return { match: null, isNew: false, totalScore: 0, dropReason: 'opposition_window' };
   }
 
   const scoringContext = buildScoringContext(watched, candidate);
-  // Picks up whatever weight profile `/api/platform/scoring/weights` last
-  // published *within this process* (see `packages/scoring/src/weight-profile.ts`).
-  // Like every other in-memory store in this codebase, this doesn't sync across
-  // the `apps/api`/`apps/worker` process boundary - see `docs/scoring/weights.md`.
   const result = await scoreMatch(scoringContext, {
     weightProfile: getActiveWeightProfile(),
+    shadowMode: true,
+    useRulesEngine: true,
     ...(context.ai ? { ai: context.ai } : {}),
   });
 
   if (result.totalScore < MATCH_CREATION_MIN_TOTAL_SCORE) {
-    return { match: null, isNew: false, totalScore: result.totalScore };
+    return { match: null, isNew: false, totalScore: result.totalScore, dropReason: 'below_threshold' };
   }
 
   const { record, isNew } = context.jobStore.upsertTrademarkMatch({
@@ -80,36 +79,31 @@ export async function scoreAndUpsertMatch(
     weightProfileId: result.weightProfile.id,
   });
 
-  return { match: record, isNew, totalScore: result.totalScore };
+  return { match: record, isNew, totalScore: result.totalScore, dropReason: null };
 }
 
 export interface RunMatchJobsSummary {
   readonly processed: number;
   readonly matchesCreated: number;
   readonly matchesUpdated: number;
+  readonly droppedBelowThreshold: number;
+  readonly droppedOppositionWindow: number;
+  readonly skippedMissing: number;
 }
 
-/**
- * Drains `context.jobStore`'s match job queue (populated by
- * `enqueueMatchJob` in `daily-sync-pipeline.ts` /
- * `initial-opposition-scan-pipeline.ts`) and scores every queued pair. This
- * stands in for a real `MATCH_CANDIDATE_BATCH`/`SCORE_MATCH` queue consumer
- * (see `docs/operations/daily-jobs.md`) - since `apps/worker`'s poller has
- * no real broker yet, the ingestion pipelines call this inline so a single
- * `REGISTER_SYNC` run is end-to-end visible. The standalone
- * `MATCH_CANDIDATE_BATCH`/`SCORE_MATCH` job handlers call this same
- * function so they remain independently triggerable from `/platform`, per
- * that doc's "Manual/on-demand runs" section.
- */
 export async function runQueuedMatchJobs(context: PipelineContext): Promise<RunMatchJobsSummary> {
   const queued = context.jobStore.drainMatchJobQueue();
   let matchesCreated = 0;
   let matchesUpdated = 0;
+  let droppedBelowThreshold = 0;
+  let droppedOppositionWindow = 0;
+  let skippedMissing = 0;
 
   for (const job of queued) {
     const watched = context.jobStore.getWatchedTrademark(job.watchedTrademarkId);
     const candidate = context.jobStore.getCandidateApplication(job.candidateApplicationId);
     if (!watched || !candidate) {
+      skippedMissing += 1;
       context.logger.warn('Match-taak overgeslagen: bewaakt merk of kandidaat niet gevonden.', {
         watchedTrademarkId: job.watchedTrademarkId,
         candidateApplicationId: job.candidateApplicationId,
@@ -121,8 +115,19 @@ export async function runQueuedMatchJobs(context: PipelineContext): Promise<RunM
     if (result.match) {
       if (result.isNew) matchesCreated += 1;
       else matchesUpdated += 1;
+    } else if (result.dropReason === 'below_threshold') {
+      droppedBelowThreshold += 1;
+    } else if (result.dropReason === 'opposition_window') {
+      droppedOppositionWindow += 1;
     }
   }
 
-  return { processed: queued.length, matchesCreated, matchesUpdated };
+  return {
+    processed: queued.length,
+    matchesCreated,
+    matchesUpdated,
+    droppedBelowThreshold,
+    droppedOppositionWindow,
+    skippedMissing,
+  };
 }

@@ -7,8 +7,10 @@ describe('generatePhoneticRepresentations', () => {
     const nl = representations.find((r) => r.locale === 'nl');
     const en = representations.find((r) => r.locale === 'en');
 
-    expect(nl).toEqual({ input: 'lumaro', locale: 'nl', code: 'lmr' });
-    expect(en).toEqual({ input: 'lumaro', locale: 'en', code: 'lmr' });
+    expect(nl?.input).toBe('lumaro');
+    expect(nl?.locale).toBe('nl');
+    expect(nl?.code).toBe('lmr');
+    expect(en?.code).toBe('lmr');
     expect(nl?.alternateCode).toBeUndefined();
   });
 
@@ -17,8 +19,8 @@ describe('generatePhoneticRepresentations', () => {
     const nl = representations.find((r) => r.locale === 'nl');
     const en = representations.find((r) => r.locale === 'en');
 
-    expect(nl).toEqual({ input: 'vantero', locale: 'nl', code: 'vntr' });
-    expect(en).toEqual({ input: 'vantero', locale: 'en', code: 'vntr' });
+    expect(nl?.code).toBe('vntr');
+    expect(en?.code).toBe('vntr');
   });
 
   it('defaults to generating both the nl and en locales', () => {
@@ -49,7 +51,6 @@ describe('generatePhoneticRepresentations', () => {
   });
 
   it('does not produce an alternateCode when "c" is unambiguous (followed by a vowel)', () => {
-    // "c" before a/o/u -> "k" and before e/i/y -> "s"; neither case is ambiguous.
     const [nl] = generatePhoneticRepresentations('cola');
 
     expect(nl?.code).toBe('kl');
@@ -58,8 +59,21 @@ describe('generatePhoneticRepresentations', () => {
 
   it('collapses doubled letters before building the consonant skeleton', () => {
     const [nl] = generatePhoneticRepresentations('lumarro');
-
     expect(nl?.code).toBe('lmr');
+  });
+
+  it('supports extended locales when requested', () => {
+    const reps = generatePhoneticRepresentations('schon', ['de', 'fr']);
+    expect(reps.map((r) => r.locale)).toEqual(['de', 'fr']);
+    expect(reps[0]?.code.length).toBeGreaterThan(0);
+  });
+
+  it('PHLOX and FLOKS share phonetic proximity in en', () => {
+    const a = generatePhoneticRepresentations('phlox', ['en'])[0]?.code;
+    const b = generatePhoneticRepresentations('floks', ['en'])[0]?.code;
+    expect(a).toBeTruthy();
+    expect(b).toBeTruthy();
+    expect(a![0]).toBe(b![0]);
   });
 
   it('returns an empty representation list of codes when given only whitespace', () => {

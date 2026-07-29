@@ -286,6 +286,24 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
     return { jobs: app.platformStore.listJobs(status ? { status } : {}) };
   });
 
+  app.get('/pipeline-runs', async () => {
+    return { runs: app.platformStore.listPipelineRuns() };
+  });
+
+  app.get(
+    '/pipeline-runs/:id',
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const run = app.platformStore.getPipelineRun(request.params.id);
+      if (!run) {
+        return reply.status(404).send({
+          code: 'PIPELINE_RUN_NOT_FOUND',
+          messageNl: 'Pipeline-run niet gevonden.',
+        });
+      }
+      return { run };
+    },
+  );
+
   app.post('/jobs/:id/retry', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const retried = app.platformStore.retryJob(request.params.id);
     if (!retried) {

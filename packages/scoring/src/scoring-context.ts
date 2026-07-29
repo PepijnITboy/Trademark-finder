@@ -1,6 +1,7 @@
 import type { CandidateApplication, ClassificationSchemeId, WatchedTrademark } from '@merkwacht/domain';
 import type { NormalizedMarkRepresentations } from '@merkwacht/normalization';
 import type { PhoneticRepresentation } from '@merkwacht/phonetics';
+import type { GoodsServiceTextEntry } from './goods/goods-services-overlap.js';
 
 /**
  * Everything a {@link ScoreComponentCalculator} or {@link AiEnrichmentPort}
@@ -18,4 +19,9 @@ export interface ScoringContext {
   /** Optional override; defaults from register catalog when omitted. */
   readonly watchedClassificationSchemeId?: ClassificationSchemeId;
   readonly candidateClassificationSchemeId?: ClassificationSchemeId;
+  /** Free-text goods/services for goodsServicesOverlap (phase 4). */
+  readonly watchedGoodsServices?: readonly GoodsServiceTextEntry[];
+  readonly candidateGoodsServices?: readonly GoodsServiceTextEntry[];
+  /** Feature flags influencing calculators (optional). */
+  readonly engineFlags?: Readonly<Record<string, boolean>>;
 }

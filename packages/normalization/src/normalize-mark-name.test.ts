@@ -70,4 +70,28 @@ describe('normalizeMarkName', () => {
     expect(concatenated.tokens).toEqual(['northvale']);
     expect(spaced.normalized).not.toBe(concatenated.normalized);
   });
+
+  it('exposes compact and unicode forms', () => {
+    const result = normalizeMarkName('ZEN-ZO');
+    expect(result.compact).toBe('zenzo');
+    expect(result.unicodeNfc).toBeDefined();
+  });
+});
+
+describe('normalizeMarkNameV2', () => {
+  it('classifies tokens instead of silently dropping product terms', async () => {
+    const { normalizeMarkNameV2 } = await import('./normalize-mark-name.js');
+    const result = normalizeMarkNameV2('ZENZO GINGER SPRITZ');
+    expect(result.classifiedTokens?.map((t) => t.normalized)).toEqual([
+      'zenzo',
+      'ginger',
+      'spritz',
+    ]);
+    expect(result.classifiedTokens?.find((t) => t.normalized === 'ginger')?.classification).toBe(
+      'product_term',
+    );
+    expect(result.classifiedTokens?.find((t) => t.normalized === 'zenzo')?.classification).toBe(
+      'distinctive',
+    );
+  });
 });

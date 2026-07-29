@@ -1,4 +1,4 @@
-export const PHONETIC_LOCALES = ['nl', 'en'] as const;
+export const PHONETIC_LOCALES = ['nl', 'en', 'de', 'fr', 'es', 'it'] as const;
 export type PhoneticLocale = (typeof PHONETIC_LOCALES)[number];
 
 /**
@@ -13,4 +13,6 @@ export interface PhoneticRepresentation {
   readonly code: string;
   /** Secondary encoding produced when a substitution rule was ambiguous. */
   readonly alternateCode?: string;
+  /** Engine version for this representation. */
+  readonly engineVersion?: string;
 }

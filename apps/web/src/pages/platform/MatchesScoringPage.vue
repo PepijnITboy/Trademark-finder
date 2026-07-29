@@ -72,8 +72,16 @@ const labels = Object.fromEntries(SCORE_COMPONENTS.map((c) => [c.key, c.labelNl]
 <template>
   <PlatformPageHeader
     title="Matches en scoring"
-    description="Bewerkbare weegprofielen (som = 100). Bij opslaan wordt een nieuwe versie actief voor de worker."
+    description="Legacy weegprofielen als noodfallback (manual_weight_fallback). Primaire logica: feature-engine + rules-risk. Som moet 100 zijn bij publiceren van een fallback-profiel."
   >
+    <MwBanner
+      tone="info"
+      title="Governance"
+      class="mb-4"
+    >
+      Handmatige percentages zijn geen primaire productlogica meer. Gebruik dit scherm alleen als gecontroleerde fallback. Feature-versie, rules-versie en shadow-vergelijking sturen de nieuwe engine.
+    </MwBanner>
+
     <Tabs v-model="activeTab" :tabs="TABS" />
 
     <MwCard v-if="activeTab === 'weights'" title="Actief weegprofiel">

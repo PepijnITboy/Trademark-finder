@@ -1,7 +1,10 @@
 import {
   deriveImportDayStatuses,
+  makeFunnelStage,
   type JobStatus,
   type JobType,
+  type PipelineFunnelSnapshot,
+  type PipelineRunKind,
   type ProcessingJob,
   type SubscriptionPlan,
   type SubscriptionStatus,
@@ -100,6 +103,19 @@ export interface PlatformImportSyncRecord {
   readonly cadenceNl: string;
 }
 
+export interface PlatformPipelineRunRecord {
+  readonly id: string;
+  readonly runKind: PipelineRunKind;
+  readonly registryCode: string | null;
+  readonly status: JobStatus;
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+  readonly error: string | null;
+  readonly funnel: PipelineFunnelSnapshot;
+  readonly startVolume: number;
+  readonly endMatches: number;
+}
+
 export interface TriggerJobInput {
   readonly type: JobType;
   readonly registryCode?: string | null;
@@ -122,6 +138,7 @@ export class PlatformStore {
   private readonly featureFlags = new Map<string, PlatformFeatureFlagRecord>();
   private readonly jobs = new Map<string, PlatformJobRecord>();
   private readonly importSyncs: PlatformImportSyncRecord[] = [];
+  private readonly pipelineRuns: PlatformPipelineRunRecord[] = [];
 
   constructor(primaryCustomerId: string) {
     this.seedCustomers(primaryCustomerId);
@@ -129,6 +146,7 @@ export class PlatformStore {
     this.seedAiUsage(primaryCustomerId);
     this.seedJobs();
     this.seedImportSyncs(primaryCustomerId);
+    this.seedPipelineRuns();
   }
 
   private seedCustomers(primaryCustomerId: string): void {
@@ -243,6 +261,83 @@ export class PlatformStore {
         rolloutPercentage: 0,
         updatedAt: now,
       },
+      {
+        key: 'shared_comparison_engine',
+        description: 'Gedeelde feature/comparison-engine voor monitoring en merkonderzoek.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'comparison_shadow_mode',
+        description: 'Schrijft feature-vector + rules-risk naast legacy totalScore.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'new_normalization_engine',
+        description: 'Normalisatie v2 met tokenclassificatie (normalizeMarkNameV2).',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'multilingual_phonetics',
+        description: 'Fonetiek-ensemble nl/en/de/fr/es/it.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'weighted_edit_distance',
+        description: 'Weighted edit distance in feature-extractie.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'goods_services_engine',
+        description: 'Goods/services overlap uit vrije tekst + Nice fallback.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'new_name_research_engine',
+        description: 'Merkonderzoek via shared comparison engine i.p.v. clearanceRiskScore.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'ai_explanation_engine',
+        description: 'AI verdict/uitleg i.p.v. vrije adjustment-score.',
+        isEnabled: false,
+        rolloutPercentage: 0,
+        updatedAt: now,
+      },
+      {
+        key: 'new_monitoring_retrieval',
+        description: 'Multi-channel candidate retrieval (union).',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'pipeline_funnel_kpi',
+        description: 'Platform funnel KPI’s per scan/export-run.',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
+      {
+        key: 'manual_weight_fallback',
+        description: 'Handmatige weight-profiles alleen als noodfallback (niet primair).',
+        isEnabled: true,
+        rolloutPercentage: 100,
+        updatedAt: now,
+      },
     ];
     for (const flag of seed) this.featureFlags.set(flag.key, flag);
   }
@@ -298,6 +393,83 @@ export class PlatformStore {
       },
     ];
     for (const job of seed) this.jobs.set(job.id, job);
+  }
+
+  private seedPipelineRuns(): void {
+    const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const finishedAt = new Date(Date.now() - 2 * 60 * 60 * 1000 + 45_000).toISOString();
+    const stages = [
+      makeFunnelStage({ code: 'fetched', entered: 60_000, passed: 58_800, reasonCodes: { invalid_payload: 1_200 } }),
+      makeFunnelStage({ code: 'validated', entered: 60_000, passed: 58_800 }),
+      makeFunnelStage({
+        code: 'changed',
+        entered: 58_800,
+        passed: 18_800,
+        reasonCodes: { unchanged: 40_000 },
+      }),
+      makeFunnelStage({
+        code: 'opposition_window',
+        entered: 18_800,
+        passed: 15_700,
+        reasonCodes: { out_of_window: 3_100 },
+      }),
+      makeFunnelStage({ code: 'feature_scored', entered: 120_000, passed: 120_000 }),
+      makeFunnelStage({
+        code: 'above_persist_threshold',
+        entered: 120_000,
+        passed: 2_400,
+        reasonCodes: { below_threshold: 117_600 },
+      }),
+      makeFunnelStage({ code: 'match_upserted', entered: 2_400, passed: 2_400 }),
+    ];
+    this.pipelineRuns.push({
+      id: createId(),
+      runKind: 'register_sync',
+      registryCode: 'BOIP',
+      status: 'succeeded',
+      startedAt,
+      finishedAt,
+      error: null,
+      startVolume: 60_000,
+      endMatches: 2_400,
+      funnel: {
+        version: 'funnel-v1',
+        runKind: 'register_sync',
+        registryCode: 'BOIP',
+        startedAt,
+        finishedAt,
+        stages,
+      },
+    });
+    this.pipelineRuns.push({
+      id: createId(),
+      runKind: 'generate_export',
+      registryCode: null,
+      status: 'failed',
+      startedAt,
+      finishedAt,
+      error: 'Exportopslag nog niet gekoppeld',
+      startVolume: 240,
+      endMatches: 0,
+      funnel: {
+        version: 'funnel-v1',
+        runKind: 'generate_export',
+        startedAt,
+        finishedAt,
+        stuckStage: 'export_stored',
+        lastError: 'Exportopslag nog niet gekoppeld',
+        stages: [
+          makeFunnelStage({ code: 'export_built', entered: 240, passed: 240 }),
+          makeFunnelStage({
+            code: 'export_stored',
+            entered: 240,
+            passed: 0,
+            reasonCodes: { storage_unwired: 240 },
+          }),
+          makeFunnelStage({ code: 'failed', entered: 1, passed: 0 }),
+        ],
+      },
+    });
   }
 
   // -- Customers / subscriptions -----------------------------------------
@@ -405,6 +577,20 @@ export class PlatformStore {
     const jobs = [...this.jobs.values()];
     const filtered = filter.status ? jobs.filter((job) => job.status === filter.status) : jobs;
     return filtered.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
+  }
+
+  listPipelineRuns(): readonly PlatformPipelineRunRecord[] {
+    return [...this.pipelineRuns].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+
+  getPipelineRun(id: string): PlatformPipelineRunRecord | null {
+    return this.pipelineRuns.find((run) => run.id === id) ?? null;
+  }
+
+  recordPipelineRun(input: Omit<PlatformPipelineRunRecord, 'id'>): PlatformPipelineRunRecord {
+    const record: PlatformPipelineRunRecord = { id: createId(), ...input };
+    this.pipelineRuns.unshift(record);
+    return record;
   }
 
   listImportSyncs(): readonly PlatformImportSyncRecord[] {
