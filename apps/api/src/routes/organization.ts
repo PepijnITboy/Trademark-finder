@@ -11,14 +11,14 @@ const updateProfileSchema = organizationProfileSchema.partial();
 
 /** `/api/v1/organization` — org profile and member management (demo identity via `x-demo-role` / `x-demo-user-id`). */
 export async function registerOrganizationRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/', async () => {
-    const organizationId = getOrganizationId(app);
+  app.get('/', async (request) => {
+    const organizationId = getOrganizationId(request);
     const profile = app.orgStore.getProfile(organizationId);
     return { profile };
   });
 
   app.patch('/', async (request: FastifyRequest) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const patch = updateProfileSchema.parse(request.body);
     const profile = app.orgStore.updateProfile(organizationId, {
       ...(patch.legalName !== undefined ? { legalName: patch.legalName } : {}),
@@ -41,14 +41,14 @@ export async function registerOrganizationRoutes(app: FastifyInstance): Promise<
     return { parsed };
   });
 
-  app.get('/members', async () => {
-    const organizationId = getOrganizationId(app);
+  app.get('/members', async (request) => {
+    const organizationId = getOrganizationId(request);
     const members = app.orgStore.listMembers(organizationId);
     return { members };
   });
 
   app.post('/members', async (request: FastifyRequest, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const input = createMemberSchema.parse(request.body);
     const { actorRole } = resolveDemoRequestContext(request);
     const member = app.orgStore.createMember(
@@ -66,7 +66,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance): Promise<
   });
 
   app.patch('/members/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const patch = updateMemberSchema.parse(request.body);
     const { actorRole, actorUserId } = resolveDemoRequestContext(request);
     const member = app.orgStore.updateMember(
@@ -92,7 +92,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance): Promise<
   });
 
   app.delete('/members/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const { actorRole, actorUserId } = resolveDemoRequestContext(request);
     const removed = app.orgStore.removeMember(organizationId, request.params.id, actorRole, actorUserId);
     if (!removed) {

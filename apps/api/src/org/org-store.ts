@@ -1,16 +1,23 @@
-import { DEV_SEED_IDS } from '@merkwacht/database';
+import { DEMO_BETA_IDS, DEMO_SECONDARY_ORG_ID, DEV_SEED_IDS } from '@merkwacht/database';
 import {
   DEFAULT_PLAN_CATALOG,
   ENTITLEMENT_MESSAGES_NL,
   PLAN_CHANGE_MESSAGES_NL,
   ROLE_GUARD_MESSAGES_NL,
   assertRoleMutationAllowed,
+  buildInvoiceLineItems,
   canAddNotificationRecipient,
   canAddWatchedTrademark,
+  computeNlBtw,
+  deriveNlBtwFromIncVat,
   evaluatePlanChange,
   isAdminRole,
+  normalizeRecipientNotifyConfig,
   resolveEntitlements,
+  sumInvoiceLineItems,
+  type DigestCadence,
   type FeatureFlag,
+  type NotifyMode,
   type PlanLimits,
   type SubscriptionEntitlements,
   type SubscriptionPlan,
@@ -21,8 +28,11 @@ import { AppError, createId } from '@merkwacht/shared';
 import type {
   BillingEventProvider,
   BillingEventRecord,
+  InAppNotificationRecord,
+  InvoiceLineItemRecord,
   InvoiceRecord,
   NotificationRecipientRecord,
+  OrganizationListItem,
   OrganizationMemberRecord,
   OrganizationMemberRole,
   OrganizationProfileRecord,
@@ -33,6 +43,8 @@ import type {
   SupportParticipantRecord,
   SupportThreadRecord,
 } from './types.js';
+
+export { DEMO_SECONDARY_ORG_ID };
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -50,6 +62,7 @@ function clonePlanCatalog(): Map<SubscriptionPlan, PlanCatalogRecord> {
       maxNotificationEmails: limits.maxNotificationEmails,
       supportTier: limits.supportTier,
       features: { ...limits.features },
+      isActive: true,
       updatedAt: now,
     });
   }
@@ -113,26 +126,60 @@ function planChangeError(reason: keyof typeof PLAN_CHANGE_MESSAGES_NL): never {
 export class OrgBillingChatStore {
   private readonly orgs = new Map<string, OrgData>();
   private readonly planCatalog = clonePlanCatalog();
+  private readonly inAppNotifications: InAppNotificationRecord[] = [];
+  private invoiceSeq = 43;
 
   constructor(primaryOrganizationId: string, settingsEmail = 'merkbewaking@voorbeeld-merkenbureau.nl') {
-    this.seedOrg(primaryOrganizationId, settingsEmail);
+    this.seedOrg({
+      organizationId: primaryOrganizationId,
+      settingsEmail,
+      legalName: 'Lumaro B.V.',
+      plan: 'starter',
+      status: 'active',
+      ownerUserId: DEV_SEED_IDS.userId,
+      kvkNumber: '12345678',
+      invoicePrefix: '004',
+    });
+    this.seedOrg({
+      organizationId: DEMO_SECONDARY_ORG_ID,
+      settingsEmail: 'info@fictieve-retail.nl',
+      legalName: 'Fictieve Retail Groep B.V.',
+      plan: 'pro',
+      status: 'trialing',
+      ownerUserId: DEMO_BETA_IDS.userId,
+      kvkNumber: '87654321',
+      invoicePrefix: '005',
+      addressLine: 'Coolsingel 10',
+      postalCode: '3011 AD',
+      city: 'Rotterdam',
+    });
   }
 
-  private seedOrg(organizationId: string, settingsEmail: string): void {
+  private seedOrg(input: {
+    organizationId: string;
+    settingsEmail: string;
+    legalName: string;
+    plan: SubscriptionPlan;
+    status: SubscriptionStatus;
+    ownerUserId: string;
+    kvkNumber: string;
+    invoicePrefix: string;
+    addressLine?: string;
+    postalCode?: string;
+    city?: string;
+  }): void {
     const now = nowIso();
     const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    const ownerId = DEV_SEED_IDS.userId;
     const juristId = createId();
 
     const members = new Map<string, OrganizationMemberRecord>([
       [
-        ownerId,
+        input.ownerUserId,
         {
-          id: ownerId,
-          organizationId,
-          email: 'admin@voorbeeld-merkenbureau.nl',
-          displayName: 'Demo Admin',
+          id: input.ownerUserId,
+          organizationId: input.organizationId,
+          email: input.settingsEmail.replace(/^[^@]+/, 'admin'),
+          displayName: input.organizationId === DEMO_SECONDARY_ORG_ID ? 'Retail Admin' : 'Demo Admin',
           role: 'owner',
           jobTitle: 'Hoofd merkenrecht',
           phone: '+31 20 123 4567',
@@ -144,9 +191,9 @@ export class OrgBillingChatStore {
         juristId,
         {
           id: juristId,
-          organizationId,
-          email: 'jurist@voorbeeld-merkenbureau.nl',
-          displayName: 'Demo Jurist',
+          organizationId: input.organizationId,
+          email: input.settingsEmail.replace(/^[^@]+/, 'jurist'),
+          displayName: input.organizationId === DEMO_SECONDARY_ORG_ID ? 'Retail Jurist' : 'Demo Jurist',
           role: 'jurist',
           jobTitle: 'Jurist merkenrecht',
           phone: null,
@@ -162,10 +209,12 @@ export class OrgBillingChatStore {
         recipientId,
         {
           id: recipientId,
-          organizationId,
-          email: settingsEmail,
+          organizationId: input.organizationId,
+          email: input.settingsEmail,
+          mode: 'digest',
+          digestCadence: 'DAILY',
           digestFrequency: 'DAILY',
-          minScoreThreshold: 50,
+          minScoreThreshold: null,
           isActive: true,
           watchedTrademarkIds: [],
           createdAt: now,
@@ -176,18 +225,29 @@ export class OrgBillingChatStore {
 
     const openInvoiceId = createId();
     const paidInvoiceId = createId();
+    const openEx = input.plan === 'pro' ? 14900 : 4900;
+    const openBtw = computeNlBtw(openEx);
     const invoices = new Map<string, InvoiceRecord>([
       [
         openInvoiceId,
         {
           id: openInvoiceId,
-          organizationId,
-          number: 'INV-2026-0042',
+          organizationId: input.organizationId,
+          number: `INV-2026-${input.invoicePrefix}2`,
           status: 'open',
-          amountCents: 4900,
-          description: 'Merkwacht Starter — maandelijks abonnement',
+          amountCents: openBtw.incVatCents,
+          exVatCents: openBtw.exVatCents,
+          btwCents: openBtw.btwCents,
+          currency: 'EUR',
+          description: `Merkwacht ${input.plan === 'pro' ? 'Pro' : 'Starter'} — maandelijks abonnement`,
+          lineItems: buildInvoiceLineItems([
+            { description: `Abonnement ${input.plan}`, exVatCents: openEx },
+          ]),
           paidAt: null,
+          dueAt: periodEnd,
+          internalNote: null,
           pdfAvailable: true,
+          ublXmlAvailable: true,
           createdAt: now,
           updatedAt: now,
         },
@@ -196,30 +256,39 @@ export class OrgBillingChatStore {
         paidInvoiceId,
         {
           id: paidInvoiceId,
-          organizationId,
-          number: 'INV-2026-0041',
+          organizationId: input.organizationId,
+          number: `INV-2026-${input.invoicePrefix}1`,
           status: 'paid',
-          amountCents: 4900,
-          description: 'Merkwacht Starter — maandelijks abonnement',
+          amountCents: openBtw.incVatCents,
+          exVatCents: openBtw.exVatCents,
+          btwCents: openBtw.btwCents,
+          currency: 'EUR',
+          description: `Merkwacht ${input.plan === 'pro' ? 'Pro' : 'Starter'} — maandelijks abonnement`,
+          lineItems: buildInvoiceLineItems([
+            { description: `Abonnement ${input.plan}`, exVatCents: openEx },
+          ]),
           paidAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          dueAt: null,
+          internalNote: null,
           pdfAvailable: true,
+          ublXmlAvailable: true,
           createdAt: now,
           updatedAt: now,
         },
       ],
     ]);
 
-    this.orgs.set(organizationId, {
+    this.orgs.set(input.organizationId, {
       profile: {
-        organizationId,
-        legalName: 'Lumaro B.V.',
-        addressLine: 'Herengracht 124',
-        postalCode: '1015 BT',
-        city: 'Amsterdam',
+        organizationId: input.organizationId,
+        legalName: input.legalName,
+        addressLine: input.addressLine ?? 'Herengracht 124',
+        postalCode: input.postalCode ?? '1015 BT',
+        city: input.city ?? 'Amsterdam',
         country: 'NL',
-        kvkNumber: '12345678',
-        contactEmail: settingsEmail,
-        billingEmail: settingsEmail,
+        kvkNumber: input.kvkNumber,
+        contactEmail: input.settingsEmail,
+        billingEmail: input.settingsEmail,
         phone: '+31 20 123 4567',
         latitude: 52.377956,
         longitude: 4.89707,
@@ -228,11 +297,13 @@ export class OrgBillingChatStore {
       members,
       recipients,
       subscription: {
-        organizationId,
-        plan: 'starter',
-        status: 'active',
+        organizationId: input.organizationId,
+        plan: input.plan,
+        status: input.status,
         pendingPlan: null,
         currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: false,
+        nextInvoiceAt: periodEnd,
         updatedAt: now,
       },
       invoices,
@@ -433,8 +504,9 @@ export class OrgBillingChatStore {
     organizationId: string,
     input: {
       email: string;
-      digestFrequency: NotificationRecipientRecord['digestFrequency'];
-      minScoreThreshold?: number;
+      mode: NotifyMode;
+      digestCadence?: DigestCadence | null;
+      minScoreThreshold?: number | null;
       allWatches?: boolean;
       watchedTrademarkIds?: string[];
     },
@@ -445,6 +517,19 @@ export class OrgBillingChatStore {
     const denial = canAddNotificationRecipient(entitlements, org.recipients.size);
     if (denial) entitlementError(denial);
 
+    const normalized = normalizeRecipientNotifyConfig({
+      mode: input.mode,
+      digestCadence: input.digestCadence,
+      minScoreThreshold: input.minScoreThreshold,
+    });
+    if (!normalized.ok) {
+      throw new AppError({
+        code: 'INVALID_RECIPIENT_CONFIG',
+        messageNl: normalized.message,
+        category: 'VALIDATION',
+      });
+    }
+
     const useAllWatches = input.allWatches !== false && (!input.watchedTrademarkIds || input.watchedTrademarkIds.length === 0);
     const watchedTrademarkIds = useAllWatches ? [...activeWatchedTrademarkIds] : [...(input.watchedTrademarkIds ?? [])];
 
@@ -453,8 +538,10 @@ export class OrgBillingChatStore {
       id: createId(),
       organizationId,
       email: input.email,
-      digestFrequency: input.digestFrequency,
-      minScoreThreshold: input.minScoreThreshold ?? 50,
+      mode: normalized.config.mode,
+      digestCadence: normalized.config.digestCadence,
+      digestFrequency: normalized.config.digestCadence ?? 'DAILY',
+      minScoreThreshold: normalized.config.minScoreThreshold,
       isActive: true,
       watchedTrademarkIds,
       createdAt: now,
@@ -468,8 +555,9 @@ export class OrgBillingChatStore {
     organizationId: string,
     recipientId: string,
     patch: {
-      digestFrequency?: NotificationRecipientRecord['digestFrequency'];
-      minScoreThreshold?: number;
+      mode?: NotifyMode;
+      digestCadence?: DigestCadence | null;
+      minScoreThreshold?: number | null;
       isActive?: boolean;
       allWatches?: boolean;
       watchedTrademarkIds?: string[];
@@ -488,10 +576,30 @@ export class OrgBillingChatStore {
       watchedTrademarkIds = [...patch.watchedTrademarkIds];
     }
 
+    const nextMode = patch.mode ?? existing.mode;
+    const normalized = normalizeRecipientNotifyConfig({
+      mode: nextMode,
+      digestCadence:
+        patch.digestCadence !== undefined ? patch.digestCadence : existing.digestCadence,
+      minScoreThreshold:
+        patch.minScoreThreshold !== undefined
+          ? patch.minScoreThreshold
+          : existing.minScoreThreshold,
+    });
+    if (!normalized.ok) {
+      throw new AppError({
+        code: 'INVALID_RECIPIENT_CONFIG',
+        messageNl: normalized.message,
+        category: 'VALIDATION',
+      });
+    }
+
     const updated: NotificationRecipientRecord = {
       ...existing,
-      digestFrequency: patch.digestFrequency ?? existing.digestFrequency,
-      minScoreThreshold: patch.minScoreThreshold ?? existing.minScoreThreshold,
+      mode: normalized.config.mode,
+      digestCadence: normalized.config.digestCadence,
+      digestFrequency: normalized.config.digestCadence ?? existing.digestFrequency,
+      minScoreThreshold: normalized.config.minScoreThreshold,
       isActive: patch.isActive ?? existing.isActive,
       watchedTrademarkIds,
       updatedAt: nowIso(),
@@ -512,6 +620,30 @@ export class OrgBillingChatStore {
     return [...this.planCatalog.values()].sort((a, b) => a.priceMonthlyCents - b.priceMonthlyCents);
   }
 
+  listActivePlans(): readonly PlanCatalogRecord[] {
+    return this.listPlans().filter((plan) => plan.isActive);
+  }
+
+  listOrganizations(watchedCounts?: ReadonlyMap<string, number>): readonly OrganizationListItem[] {
+    return [...this.orgs.values()]
+      .map((org) => ({
+        id: org.profile.organizationId,
+        legalName: org.profile.legalName,
+        plan: org.subscription.plan,
+        status: org.subscription.status,
+        since: [...org.members.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.createdAt
+          ?? org.subscription.updatedAt,
+        openInvoiceCount: [...org.invoices.values()].filter((invoice) => invoice.status === 'open').length,
+        memberCount: org.members.size,
+        watchedTrademarkCount: watchedCounts?.get(org.profile.organizationId) ?? 0,
+      }))
+      .sort((a, b) => a.legalName.localeCompare(b.legalName, 'nl'));
+  }
+
+  hasOrganization(organizationId: string): boolean {
+    return this.orgs.has(organizationId);
+  }
+
   changePlan(
     organizationId: string,
     targetPlan: SubscriptionPlan,
@@ -520,10 +652,10 @@ export class OrgBillingChatStore {
     const org = this.getOrg(organizationId);
     const current = this.getEntitlements(organizationId);
     const targetRecord = this.planCatalog.get(targetPlan);
-    if (!targetRecord) {
+    if (!targetRecord || !targetRecord.isActive) {
       throw new AppError({
         code: 'PLAN_NOT_FOUND',
-        messageNl: 'Het gekozen abonnement bestaat niet.',
+        messageNl: 'Het gekozen abonnement bestaat niet of is uitgeschakeld.',
         category: 'NOT_FOUND',
       });
     }
@@ -575,6 +707,7 @@ export class OrgBillingChatStore {
       maxNotificationEmails: patch.maxNotificationEmails ?? existing.maxNotificationEmails,
       supportTier: patch.supportTier ?? existing.supportTier,
       features: patch.features ? { ...existing.features, ...patch.features } : existing.features,
+      isActive: patch.isActive ?? existing.isActive,
       updatedAt: nowIso(),
     };
     this.planCatalog.set(plan, updated);
@@ -600,11 +733,158 @@ export class OrgBillingChatStore {
     return [...this.getOrg(organizationId).invoices.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  /** Customer-safe invoice view without internal platform notes. */
+  listCustomerInvoices(organizationId: string): readonly Omit<InvoiceRecord, 'internalNote'>[] {
+    return this.listInvoices(organizationId).map(({ internalNote: _note, ...rest }) => rest);
+  }
+
   getInvoice(organizationId: string, invoiceId: string): InvoiceRecord | null {
     return this.getOrg(organizationId).invoices.get(invoiceId) ?? null;
   }
 
-  markInvoicePaid(organizationId: string, invoiceId: string): InvoiceRecord | null {
+  createInvoice(
+    organizationId: string,
+    input: {
+      amountCents?: number;
+      exVatCents?: number;
+      lineItems?: readonly { description: string; exVatCents: number }[];
+      description: string;
+      status?: 'draft' | 'open' | 'paid';
+      number?: string;
+      dueAt?: string | null;
+    },
+  ): InvoiceRecord {
+    const org = this.getOrg(organizationId);
+    const now = nowIso();
+    const seq = this.invoiceSeq++;
+
+    let lineItems: readonly InvoiceLineItemRecord[] | undefined;
+    let totals: { exVatCents: number; btwCents: number; incVatCents: number };
+    if (input.lineItems && input.lineItems.length > 0) {
+      lineItems = buildInvoiceLineItems(input.lineItems);
+      totals = sumInvoiceLineItems(lineItems);
+    } else if (input.exVatCents !== undefined) {
+      lineItems = buildInvoiceLineItems([{ description: input.description, exVatCents: input.exVatCents }]);
+      totals = computeNlBtw(input.exVatCents);
+    } else {
+      totals = deriveNlBtwFromIncVat(input.amountCents ?? 0);
+      lineItems = buildInvoiceLineItems([{ description: input.description, exVatCents: totals.exVatCents }]);
+    }
+
+    const status = input.status ?? 'open';
+    const invoice: InvoiceRecord = {
+      id: createId(),
+      organizationId,
+      number: input.number ?? `INV-2026-${String(seq).padStart(4, '0')}`,
+      status,
+      amountCents: totals.incVatCents,
+      exVatCents: totals.exVatCents,
+      btwCents: totals.btwCents,
+      currency: 'EUR',
+      description: input.description,
+      lineItems,
+      paidAt: status === 'paid' ? now : null,
+      dueAt: input.dueAt ?? (status === 'draft' ? null : org.subscription.currentPeriodEnd),
+      internalNote: null,
+      pdfAvailable: status !== 'draft',
+      ublXmlAvailable: status !== 'draft',
+      createdAt: now,
+      updatedAt: now,
+    };
+    org.invoices.set(invoice.id, invoice);
+    return invoice;
+  }
+
+  requestCancelAtPeriodEnd(organizationId: string): SubscriptionStateRecord {
+    const org = this.getOrg(organizationId);
+    org.subscription = {
+      ...org.subscription,
+      cancelAtPeriodEnd: true,
+      nextInvoiceAt: null,
+      updatedAt: nowIso(),
+    };
+    return org.subscription;
+  }
+
+  undoCancelAtPeriodEnd(organizationId: string): SubscriptionStateRecord {
+    const org = this.getOrg(organizationId);
+    org.subscription = {
+      ...org.subscription,
+      cancelAtPeriodEnd: false,
+      nextInvoiceAt: org.subscription.currentPeriodEnd,
+      updatedAt: nowIso(),
+    };
+    return org.subscription;
+  }
+
+  /**
+   * Issues (draft → open) the subscription's next invoice from the current
+   * plan price. When `cancelAtPeriodEnd` was requested, this is the point
+   * where cancellation actually takes effect instead of rolling the period
+   * forward — mirroring how Stripe finalizes the last invoice before churn.
+   */
+  issueUpcomingInvoice(organizationId: string): InvoiceRecord {
+    const org = this.getOrg(organizationId);
+    const plan = this.planCatalog.get(org.subscription.plan)!;
+    const description = `Merkwacht ${plan.displayNameNl} — maandelijks abonnement`;
+    const draft = this.createInvoice(organizationId, {
+      description,
+      lineItems: [{ description, exVatCents: plan.priceMonthlyCents }],
+      status: 'draft',
+      dueAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    const finalized = this.finalizeInvoice(organizationId, draft.id)!;
+
+    if (org.subscription.cancelAtPeriodEnd) {
+      org.subscription = {
+        ...org.subscription,
+        status: 'canceled',
+        cancelAtPeriodEnd: false,
+        nextInvoiceAt: null,
+        updatedAt: nowIso(),
+      };
+    } else {
+      const nextPeriodEnd = new Date(
+        new Date(org.subscription.currentPeriodEnd).getTime() + 30 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      org.subscription = {
+        ...org.subscription,
+        currentPeriodEnd: nextPeriodEnd,
+        nextInvoiceAt: nextPeriodEnd,
+        updatedAt: nowIso(),
+      };
+    }
+
+    return finalized;
+  }
+
+  finalizeInvoice(organizationId: string, invoiceId: string): InvoiceRecord | null {
+    const org = this.getOrg(organizationId);
+    const existing = org.invoices.get(invoiceId);
+    if (!existing) return null;
+    if (existing.status !== 'draft') {
+      throw new AppError({
+        code: 'INVOICE_NOT_DRAFT',
+        messageNl: 'Alleen conceptfacturen kunnen worden bevestigd.',
+        category: 'CONFLICT',
+      });
+    }
+    const updated: InvoiceRecord = {
+      ...existing,
+      status: 'open',
+      pdfAvailable: true,
+      ublXmlAvailable: true,
+      updatedAt: nowIso(),
+    };
+    org.invoices.set(invoiceId, updated);
+    return updated;
+  }
+
+  markInvoicePaid(
+    organizationId: string,
+    invoiceId: string,
+    options?: { internalNote?: string },
+  ): InvoiceRecord | null {
     const org = this.getOrg(organizationId);
     const existing = org.invoices.get(invoiceId);
     if (!existing) return null;
@@ -613,6 +893,7 @@ export class OrgBillingChatStore {
       ...existing,
       status: 'paid',
       paidAt: nowIso(),
+      internalNote: options?.internalNote?.trim() || existing.internalNote,
       updatedAt: nowIso(),
     };
     org.invoices.set(invoiceId, updated);
@@ -627,6 +908,46 @@ export class OrgBillingChatStore {
       }
     }
     return results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  sendInAppNotification(input: {
+    organizationId: string;
+    title: string;
+    body: string;
+    sentByUserId: string;
+    kind?: InAppNotificationRecord['kind'];
+  }): InAppNotificationRecord {
+    this.getOrg(input.organizationId);
+    const notification: InAppNotificationRecord = {
+      id: createId(),
+      organizationId: input.organizationId,
+      title: input.title.trim(),
+      body: input.body.trim(),
+      kind: input.kind ?? inferNotificationKind(input.title, input.body),
+      sentByUserId: input.sentByUserId,
+      createdAt: nowIso(),
+      readAt: null,
+    };
+    this.inAppNotifications.unshift(notification);
+    return notification;
+  }
+
+  listInAppNotifications(organizationId?: string): readonly InAppNotificationRecord[] {
+    const all = organizationId
+      ? this.inAppNotifications.filter((n) => n.organizationId === organizationId)
+      : this.inAppNotifications;
+    return [...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  markInAppNotificationRead(organizationId: string, notificationId: string): InAppNotificationRecord | null {
+    const notification = this.inAppNotifications.find(
+      (n) => n.id === notificationId && n.organizationId === organizationId,
+    );
+    if (!notification) return null;
+    if (!notification.readAt) {
+      (notification as { readAt: string | null }).readAt = nowIso();
+    }
+    return notification;
   }
 
   recordBillingEvent(
@@ -826,6 +1147,19 @@ export class OrgBillingChatStore {
     const denial = canAddWatchedTrademark(this.getEntitlements(organizationId), currentActiveCount);
     if (denial) entitlementError(denial);
   }
+}
+
+function inferNotificationKind(
+  title: string,
+  body: string,
+): InAppNotificationRecord['kind'] {
+  const text = `${title} ${body}`.toLowerCase();
+  if (text.includes('connector') || text.includes('offline') || text.includes('register')) return 'connector_down';
+  if (text.includes('factuur') || text.includes('invoice') || text.includes('betaling')) return 'invoice';
+  if (text.includes('rapport') || text.includes('merkonderzoek') || text.includes('onderzoek')) return 'report_ready';
+  if (text.includes('match')) return 'match';
+  if (text.includes('admin') || text.includes('merkwacht')) return 'admin';
+  return 'general';
 }
 
 export function createOrgBillingChatStore(organizationId: string, settingsEmail?: string): OrgBillingChatStore {

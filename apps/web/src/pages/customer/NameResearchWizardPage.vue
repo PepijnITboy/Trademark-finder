@@ -1,30 +1,29 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+  NAME_RESEARCH_DEFAULT_THRESHOLD,
+  NAME_RESEARCH_DISCLAIMER_NL,
+  resolveClassPickerOptions,
+  type ClassificationSchemeId,
+} from '@merkwacht/domain';
 import MwBanner from '../../components/MwBanner.vue';
 import MwButton from '../../components/MwButton.vue';
 import MwCard from '../../components/MwCard.vue';
 import MwPage from '../../components/MwPage.vue';
-import WizardSteps from './wizard/WizardSteps.vue';
+import WizardSteps from '../../components/motion/WizardSteps.vue';
 import { ApiError } from '../../api/client';
 import {
   formatEuroCents,
   useCreateNameResearchOrder,
-  useNameResearchCredits,
   useNameResearchQuote,
   useNameResearchRegisters,
   type NameResearchQuote,
   type NameResearchScopeRecord,
 } from '../../api/name-research';
 import { useToastStore } from '../../stores/toast';
-import {
-  NAME_RESEARCH_DISCLAIMER_NL,
-  NAME_RESEARCH_MIN_THRESHOLD,
-  shouldWarnLargeReport,
-} from '@merkwacht/domain';
 
-const STEP_LABELS = ['Merknaam', 'Registers & klassen', 'Drempel', 'Betalen'];
-const ALL_NICE = Array.from({ length: 45 }, (_, i) => i + 1);
+const STEP_LABELS = ['Merknaam', 'Registers & klassen', 'Toelichting', 'Betalen'] as const;
 
 const router = useRouter();
 const toast = useToastStore();
@@ -36,14 +35,10 @@ const selectedCodes = ref<string[]>(['BOIP']);
 const classesByRegister = reactive<Record<string, number[]>>({
   BOIP: [9, 35, 42],
 });
-const minScoreThreshold = ref(40);
-const thresholdInput = ref('40');
-const useCredit = ref(true);
 const quote = ref<NameResearchQuote | null>(null);
 const submitError = ref<string | null>(null);
 
 const registersQuery = useNameResearchRegisters();
-const creditsQuery = useNameResearchCredits();
 const quoteMutation = useNameResearchQuote();
 const createMutation = useCreateNameResearchOrder();
 
@@ -58,16 +53,36 @@ const filteredRegisters = computed(() => {
       r.regionNl.toLowerCase().includes(q),
   );
 });
-const credits = computed(() => creditsQuery.data.value);
-const canUseCredit = computed(() => (credits.value?.balance ?? 0) > 0);
-const warnLarge = computed(() => shouldWarnLargeReport(minScoreThreshold.value));
+
+/** Classification scheme for a register, from the catalog's `classificationSchemeId` (defaults to `nice_45`). */
+function schemeIdForRegister(code: string): ClassificationSchemeId {
+  return (availableRegisters.value.find((r) => r.code === code)?.classificationSchemeId as ClassificationSchemeId) ?? 'nice_45';
+}
+
+/**
+ * Class options for a single register's picker, resolved via
+ * `resolveClassPickerOptions` rather than a hardcoded Nice 1-45 list, so a
+ * register on a non-Nice scheme (e.g. US legacy certification classes)
+ * never shows fabricated Nice classes. Each register has its own
+ * independent picker, so single-scheme resolution is always `comparable`.
+ */
+function classOptionsForRegister(code: string) {
+  return resolveClassPickerOptions([schemeIdForRegister(code)]).classes;
+}
+
+function defaultClassesForRegister(code: string): number[] {
+  const options = classOptionsForRegister(code);
+  const numericCodes = options.map((c) => c.code).filter((c): c is number => typeof c === 'number');
+  const preferred = numericCodes.filter((n) => [9, 35, 42].includes(n));
+  return preferred.length ? preferred : numericCodes.slice(0, 3);
+}
 
 const scopes = computed((): NameResearchScopeRecord[] =>
   selectedCodes.value.map((code) => ({
     registryCode: code,
     niceClasses: classesByRegister[code]?.length
       ? [...classesByRegister[code]!]
-      : [9, 35, 42],
+      : defaultClassesForRegister(code),
   })),
 );
 
@@ -92,24 +107,6 @@ watch(
   { immediate: true, deep: true },
 );
 
-watch(canUseCredit, (ok) => {
-  if (!ok) useCredit.value = false;
-}, { immediate: true });
-
-watch(minScoreThreshold, (v) => {
-  thresholdInput.value = String(v);
-});
-
-function syncThresholdFromInput(): void {
-  const n = Number.parseInt(thresholdInput.value, 10);
-  if (Number.isNaN(n)) {
-    thresholdInput.value = String(minScoreThreshold.value);
-    return;
-  }
-  minScoreThreshold.value = Math.min(100, Math.max(NAME_RESEARCH_MIN_THRESHOLD, n));
-  thresholdInput.value = String(minScoreThreshold.value);
-}
-
 function toggleRegister(code: string): void {
   const set = new Set(selectedCodes.value);
   if (set.has(code)) {
@@ -117,7 +114,7 @@ function toggleRegister(code: string): void {
   } else {
     set.add(code);
     if (!classesByRegister[code]?.length) {
-      classesByRegister[code] = [9, 35, 42];
+      classesByRegister[code] = defaultClassesForRegister(code);
     }
   }
   selectedCodes.value = [...set];
@@ -131,7 +128,9 @@ function toggleClass(code: string, n: number): void {
 }
 
 function selectAllClasses(code: string): void {
-  classesByRegister[code] = [...ALL_NICE];
+  classesByRegister[code] = classOptionsForRegister(code)
+    .map((c) => c.code)
+    .filter((c): c is number => typeof c === 'number');
 }
 
 function clearClasses(code: string): void {
@@ -149,8 +148,8 @@ async function submit(): Promise<void> {
       markText: markText.value.trim(),
       intendedNicheNl: intendedNicheNl.value.trim() || null,
       scopes: scopes.value,
-      minScoreThreshold: minScoreThreshold.value,
-      useCredit: useCredit.value && canUseCredit.value,
+      minScoreThreshold: NAME_RESEARCH_DEFAULT_THRESHOLD,
+      useCredit: false,
     });
     toast.success('Merkonderzoek gestart');
     void router.push({ name: 'app-merkonderzoek-detail', params: { id: order.id } });
@@ -174,105 +173,111 @@ async function submit(): Promise<void> {
     </MwBanner>
 
     <MwCard>
-      <div v-if="step === 1" class="space-y-4">
-        <label class="block space-y-1.5">
-          <span class="text-sm font-medium text-text">Gewenste merknaam</span>
-          <input
-            v-model="markText"
-            type="text"
-            maxlength="120"
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-            placeholder="Bijv. NOVAFORM"
-          />
-        </label>
-        <label class="block space-y-1.5">
-          <span class="text-sm font-medium text-text">Niche / toelichting (optioneel)</span>
-          <textarea
-            v-model="intendedNicheNl"
-            rows="3"
-            maxlength="2000"
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-            placeholder="Bijv. SaaS voor retailers in Benelux, focus op software (9/42)…"
-          />
-          <span class="block text-xs text-text-muted">
-            Waar letten we extra op? Product, markt, of klassen die u wilt aanvragen.
-          </span>
-        </label>
-        <div class="flex justify-end gap-2">
-          <MwButton :disabled="markText.trim().length < 2" @click="step = 2">Volgende</MwButton>
+      <Transition name="mw-step" mode="out-in">
+        <div v-if="step === 1" key="step-1" class="space-y-4">
+          <label class="block space-y-1.5">
+            <span class="text-sm font-medium text-text">Gewenste merknaam</span>
+            <input
+              v-model="markText"
+              type="text"
+              maxlength="120"
+              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              placeholder="Bijv. NOVAFORM"
+            />
+          </label>
+          <div class="flex justify-end gap-2">
+            <MwButton :disabled="markText.trim().length < 2" @click="step = 2">Volgende</MwButton>
+          </div>
         </div>
-      </div>
 
-      <div v-else-if="step === 2" class="space-y-4">
-        <label class="block space-y-1.5">
-          <span class="text-sm font-medium text-text">Zoek register</span>
-          <input
-            v-model="registerSearch"
-            type="search"
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-            placeholder="Bijv. Benelux, EUIPO, Duitsland…"
-          />
-        </label>
+        <div v-else-if="step === 2" key="step-2" class="space-y-4">
+          <label class="block space-y-1.5">
+            <span class="text-sm font-medium text-text">Zoek register</span>
+            <input
+              v-model="registerSearch"
+              type="search"
+              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              placeholder="Bijv. Benelux, EUIPO, Duitsland…"
+            />
+          </label>
 
-        <ul class="space-y-3">
-          <li
-            v-for="reg in filteredRegisters"
-            :key="reg.code"
-            class="rounded-lg border border-border p-3"
-            :class="selectedCodes.includes(reg.code) ? 'border-accent-strong bg-accent-soft/15' : ''"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <button
-                type="button"
-                class="flex flex-1 items-start gap-3 text-left"
-                @click="toggleRegister(reg.code)"
-              >
-                <span
-                  class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border"
-                  :class="
-                    selectedCodes.includes(reg.code)
-                      ? 'border-accent-strong bg-accent-strong text-white'
-                      : 'border-border bg-surface'
-                  "
-                  aria-hidden="true"
+          <ul class="space-y-3">
+            <li
+              v-for="reg in filteredRegisters"
+              :key="reg.code"
+              class="rounded-lg border border-border p-3"
+              :class="selectedCodes.includes(reg.code) ? 'border-accent-strong bg-accent-soft/15' : ''"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  class="flex flex-1 items-start gap-3 text-left"
+                  @click="toggleRegister(reg.code)"
                 >
-                  <svg
-                    v-if="selectedCodes.includes(reg.code)"
-                    class="h-3.5 w-3.5"
-                    viewBox="0 0 12 12"
-                    fill="none"
+                  <span
+                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border"
+                    :class="
+                      selectedCodes.includes(reg.code)
+                        ? 'border-accent-strong bg-accent-strong text-white'
+                        : 'border-border bg-surface'
+                    "
+                    aria-hidden="true"
                   >
-                    <path
-                      d="M2.5 6.2L4.8 8.5L9.5 3.5"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </span>
-                <span>
-                  <span class="block text-sm font-medium text-text">{{ reg.displayNameNl }}</span>
-                  <span class="text-xs text-text-muted">
-                    {{ reg.regionNl }}
-                    <template v-if="reg.connectorStatus !== 'live'"> · connector volgt</template>
+                    <svg
+                      v-if="selectedCodes.includes(reg.code)"
+                      class="h-3.5 w-3.5"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                    >
+                      <path
+                        d="M2.5 6.2L4.8 8.5L9.5 3.5"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
                   </span>
-                </span>
-              </button>
-              <span class="text-sm tabular-nums text-text">{{ formatEuroCents(reg.basePriceCents) }}</span>
-            </div>
+                  <span>
+                    <span class="block text-sm font-medium text-text">{{ reg.displayNameNl }}</span>
+                    <span class="text-xs text-text-muted">
+                      {{ reg.regionNl }}
+                      <template v-if="reg.connectorStatus !== 'live'"> · connector volgt</template>
+                    </span>
+                  </span>
+                </button>
+                <span class="text-sm tabular-nums text-text">{{ formatEuroCents(reg.basePriceCents) }}</span>
+              </div>
 
-            <div v-if="selectedCodes.includes(reg.code)" class="mt-3 space-y-2 border-t border-border pt-3">
-              <div class="flex flex-wrap items-center justify-between gap-2">
+              <div v-if="selectedCodes.includes(reg.code)" class="mt-3 space-y-2 border-t border-border pt-3">
                 <p class="text-xs font-medium text-text-muted">Nice-klassen voor {{ reg.code }}</p>
-                <div class="flex gap-2">
+                <MwButton
+                  variant="primary"
+                  size="sm"
+                  block
+                  class="mb-1"
+                  @click="selectAllClasses(reg.code)"
+                >
+                  Alle klassen
+                </MwButton>
+                <div class="grid grid-cols-[repeat(9,minmax(0,1fr))] gap-1.5 sm:grid-cols-[repeat(15,minmax(0,1fr))]">
                   <button
+                    v-for="cls in classOptionsForRegister(reg.code)"
+                    :key="`${reg.code}-${cls.code}`"
                     type="button"
-                    class="text-xs font-medium text-accent-strong hover:underline"
-                    @click="selectAllClasses(reg.code)"
+                    :title="cls.labelNl"
+                    class="mw-chip rounded-md border px-1.5 py-1.5 text-center text-xs tabular-nums"
+                    :class="
+                      (classesByRegister[reg.code] ?? []).includes(Number(cls.code))
+                        ? 'border-accent-strong bg-accent-soft font-semibold text-accent-strong'
+                        : 'border-border text-text-muted hover:border-border-strong'
+                    "
+                    @click="toggleClass(reg.code, Number(cls.code))"
                   >
-                    Alle klassen
+                    {{ cls.code }}
                   </button>
+                </div>
+                <div class="flex justify-end">
                   <button
                     type="button"
                     class="text-xs font-medium text-text-muted hover:underline"
@@ -281,129 +286,80 @@ async function submit(): Promise<void> {
                     Wissen
                   </button>
                 </div>
-              </div>
-              <div class="grid grid-cols-[repeat(9,minmax(0,1fr))] gap-1.5 sm:grid-cols-[repeat(15,minmax(0,1fr))]">
-                <button
-                  v-for="n in ALL_NICE"
-                  :key="`${reg.code}-${n}`"
-                  type="button"
-                  class="rounded-md border px-1.5 py-1.5 text-center text-xs tabular-nums transition-colors"
-                  :class="
-                    (classesByRegister[reg.code] ?? []).includes(n)
-                      ? 'border-accent-strong bg-accent-soft font-semibold text-accent-strong'
-                      : 'border-border text-text-muted hover:border-border-strong'
-                  "
-                  @click="toggleClass(reg.code, n)"
+                <p
+                  v-if="!(classesByRegister[reg.code] ?? []).length"
+                  class="text-xs text-danger"
                 >
-                  {{ n }}
-                </button>
+                  Selecteer minstens één klasse voor dit register.
+                </p>
               </div>
-              <p
-                v-if="!(classesByRegister[reg.code] ?? []).length"
-                class="text-xs text-danger"
-              >
-                Selecteer minstens één klasse voor dit register.
-              </p>
-            </div>
-          </li>
-        </ul>
+            </li>
+          </ul>
 
-        <p v-if="quote" class="text-sm font-medium text-text">
-          Totaal: {{ formatEuroCents(quote.totalCents) }}
-          <span class="font-normal text-text-muted">(alleen geselecteerde registers)</span>
-        </p>
+          <p v-if="quote" class="text-sm font-medium text-text">
+            Totaal: {{ formatEuroCents(quote.totalCents) }}
+            <span class="font-normal text-text-muted">(alleen geselecteerde registers)</span>
+          </p>
 
-        <div class="flex justify-between gap-2">
-          <MwButton variant="secondary" @click="step = 1">Terug</MwButton>
-          <MwButton :disabled="!scopesValid" @click="step = 3">Volgende</MwButton>
-        </div>
-      </div>
-
-      <div v-else-if="step === 3" class="space-y-4">
-        <label class="block space-y-2">
-          <span class="text-sm font-medium text-text">Minimale risicoscore om te tonen</span>
-          <div class="flex flex-wrap items-center gap-3">
-            <input
-              v-model.number="minScoreThreshold"
-              type="range"
-              :min="NAME_RESEARCH_MIN_THRESHOLD"
-              max="100"
-              step="1"
-              class="min-w-[12rem] flex-1"
-            />
-            <div class="flex items-center gap-1">
-              <input
-                v-model="thresholdInput"
-                type="number"
-                :min="NAME_RESEARCH_MIN_THRESHOLD"
-                max="100"
-                class="w-20 rounded-md border border-border bg-surface px-2 py-1.5 text-sm tabular-nums"
-                @change="syncThresholdFromInput"
-                @blur="syncThresholdFromInput"
-              />
-              <span class="text-sm text-text-muted">%</span>
-            </div>
+          <div class="flex justify-between gap-2">
+            <MwButton variant="secondary" @click="step = 1">Terug</MwButton>
+            <MwButton :disabled="!scopesValid" @click="step = 3">Volgende</MwButton>
           </div>
-          <span class="block text-xs text-text-muted">
-            Alles krijgt een score; treffers onder deze drempel verdwijnen uit het rapport.
-            Dit heeft geen invloed op de prijs. Vloer {{ NAME_RESEARCH_MIN_THRESHOLD }}%.
-          </span>
-        </label>
-
-        <MwBanner v-if="warnLarge" tone="warning" title="Groot rapport">
-          Bij een lage drempel (onder 40%) kunnen honderden treffers zichtbaar worden. Verhoog
-          de drempel als u alleen de sterkere risico’s wilt zien.
-        </MwBanner>
-
-        <p v-if="quote" class="text-sm text-text">
-          Prijs blijft {{ formatEuroCents(quote.totalCents) }} (registers).
-        </p>
-
-        <div class="flex justify-between gap-2">
-          <MwButton variant="secondary" @click="step = 2">Terug</MwButton>
-          <MwButton @click="step = 4">Volgende</MwButton>
         </div>
-      </div>
 
-      <div v-else class="space-y-4">
-        <p class="text-sm text-text">
-          Merknaam <strong>{{ markText }}</strong>
-          · {{ scopes.length }} register(s)
-          · drempel {{ minScoreThreshold }}%
-        </p>
-        <ul class="space-y-1 text-xs text-text-muted">
-          <li v-for="s in scopes" :key="s.registryCode">
-            {{ s.registryCode }}:
-            {{
-              s.niceClasses.length >= 45
-                ? 'alle klassen'
-                : s.niceClasses.join(', ')
-            }}
-          </li>
-        </ul>
-        <p v-if="quote" class="text-lg font-semibold tabular-nums">
-          {{ formatEuroCents(quote.totalCents) }}
-        </p>
-        <label v-if="canUseCredit" class="flex items-start gap-3 rounded-md border border-border p-3">
-          <input v-model="useCredit" type="checkbox" class="mt-1" />
-          <span>
-            <span class="block text-sm font-medium">1 credit gebruiken (gratis scannen)</span>
-            <span class="text-xs text-text-muted">
-              Saldo: {{ credits?.balance ?? 0 }} credit(s)
+        <div v-else-if="step === 3" key="step-3" class="space-y-4">
+          <label class="block space-y-1.5">
+            <span class="text-sm font-medium text-text">Toelichting (optioneel)</span>
+            <textarea
+              v-model="intendedNicheNl"
+              rows="4"
+              maxlength="2000"
+              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              placeholder="Bijv. SaaS voor retailers in Benelux, focus op software (9/42)…"
+            />
+            <span class="block text-xs text-text-muted">
+              Waar letten we extra op? Product, markt, of klassen die u wilt aanvragen.
             </span>
-          </span>
-        </label>
-        <p v-else class="text-sm text-text-muted">
-          Geen credits beschikbaar — betaling via iDEAL of kaart (demo rondt direct af).
-        </p>
-        <MwBanner v-if="submitError" tone="danger" title="Aanvraag mislukt">{{ submitError }}</MwBanner>
-        <div class="flex justify-between gap-2">
-          <MwButton variant="secondary" @click="step = 3">Terug</MwButton>
-          <MwButton :loading="createMutation.isPending.value" @click="submit">
-            {{ useCredit && canUseCredit ? 'Start met credit' : 'Betalen en starten' }}
-          </MwButton>
+          </label>
+          <div class="flex justify-between gap-2">
+            <MwButton variant="secondary" @click="step = 2">Terug</MwButton>
+            <MwButton @click="step = 4">Volgende</MwButton>
+          </div>
         </div>
-      </div>
+
+        <div v-else key="step-4" class="space-y-4">
+          <p class="text-sm text-text">
+            Merknaam <strong>{{ markText }}</strong>
+            · {{ scopes.length }} register(s)
+          </p>
+          <ul class="space-y-1 text-xs text-text-muted">
+            <li v-for="s in scopes" :key="s.registryCode">
+              {{ s.registryCode }}:
+              {{
+                s.niceClasses.length >= classOptionsForRegister(s.registryCode).length
+                  ? 'alle klassen'
+                  : s.niceClasses.join(', ')
+              }}
+            </li>
+          </ul>
+          <p v-if="intendedNicheNl.trim()" class="text-sm text-text-muted">
+            Toelichting: {{ intendedNicheNl.trim() }}
+          </p>
+          <p v-if="quote" class="text-lg font-semibold tabular-nums">
+            {{ formatEuroCents(quote.totalCents) }}
+          </p>
+          <p class="text-sm text-text-muted">
+            Betaling per aanvraag via iDEAL of kaart (demo rondt direct af). Factuur verschijnt onder Betalingen.
+          </p>
+          <MwBanner v-if="submitError" tone="danger" title="Aanvraag mislukt">{{ submitError }}</MwBanner>
+          <div class="flex justify-between gap-2">
+            <MwButton variant="secondary" @click="step = 3">Terug</MwButton>
+            <MwButton :loading="createMutation.isPending.value" @click="submit">
+              Betalen en starten
+            </MwButton>
+          </div>
+        </div>
+      </Transition>
     </MwCard>
   </MwPage>
 </template>

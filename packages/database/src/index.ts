@@ -4,8 +4,23 @@ export type { SupabaseAdminClientOptions } from './admin-client';
 export { createSupabaseAnonClient } from './anon-client';
 export type { SupabaseAnonClientOptions } from './anon-client';
 
-export { DEV_PLATFORM_USER_IDS, DEV_SEED_IDS, DevIdentityProvider, isDevPlatformUser } from './dev-identity';
-export type { DevIdentity, IdentityProvider } from './dev-identity';
+export {
+  DEMO_BETA_IDS,
+  DEMO_SECONDARY_ORG_ID,
+  DEV_PLATFORM_USER_IDS,
+  DEV_SEED_IDS,
+  DevIdentityProvider,
+  RequestScopedIdentityProvider,
+  isDevPlatformUser,
+} from './dev-identity';
+export type { DevIdentity, IdentityProvider, TenantContext } from './dev-identity';
+
+export {
+  TENANCY_TABLE_REGISTRY,
+  expandTenancyMatrix,
+  expectedAccess,
+} from './tenancy/registry';
+export type { TenancyActor, TenancyOperation, TenancyTableSpec, TableScope } from './tenancy/registry';
 
 export type { Database } from './types';
 

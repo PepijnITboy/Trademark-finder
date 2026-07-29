@@ -520,4 +520,58 @@ values (
   'FICTIEF/DEMO: dit is voorbeelddata voor lokale ontwikkeling, geen echte registerdata en geen juridisch advies. Niet gebruiken als signaal richting klanten.'
 );
 
+-- ---------------------------------------------------------------------
+-- OrgBeta (tenancy isolation fixture) — never shares data with OrgAlpha
+-- ---------------------------------------------------------------------
+
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password,
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  created_at, updated_at
+) values (
+  '00000000-0000-4000-8000-000000000013',
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated',
+  'authenticated',
+  'beta@merkwacht.local',
+  '$2a$10$devseedonlynotarealbcrypthashxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"name":"Beta Gebruiker"}'::jsonb,
+  '', '', '', '',
+  now(),
+  now()
+)
+on conflict (id) do nothing;
+
+insert into public.organizations (id, name)
+values ('00000000-0000-4000-8000-000000000011', 'Fictieve Retail Groep B.V.')
+on conflict (id) do nothing;
+
+insert into public.workspaces (id, organization_id, name)
+values (
+  '00000000-0000-4000-8000-000000000012',
+  '00000000-0000-4000-8000-000000000011',
+  'Retail workspace'
+)
+on conflict (id) do nothing;
+
+insert into public.workspace_members (workspace_id, user_id, role)
+values (
+  '00000000-0000-4000-8000-000000000012',
+  '00000000-0000-4000-8000-000000000013',
+  'owner'
+)
+on conflict do nothing;
+
+insert into public.workspace_subscriptions (workspace_id, subscription_plan_id, status, started_at)
+values (
+  '00000000-0000-4000-8000-000000000012',
+  '00000000-0000-4000-8000-000000000113',
+  'trialing',
+  now()
+)
+on conflict do nothing;
+
 commit;

@@ -39,7 +39,14 @@ export function isActiveMatchStatus(status: MatchStatus): boolean {
 }
 
 export function isDeadlineEligibleStatus(status: MatchStatus): boolean {
-  return isActiveMatchStatus(status);
+  // Possible (new) and active matches with an opposition window appear in deadlines.
+  return status === 'new' || isActiveMatchStatus(status);
+}
+
+/** Past opposition deadline → archive status. */
+export function expireDeadlineMatchStatus(from: MatchStatus): MatchStatus | null {
+  if (!isDeadlineEligibleStatus(from)) return null;
+  return 'opposition_deadline_passed';
 }
 
 /** Accept from possible inbox → under_review (actieve matches). Accepting IS marking relevant. */

@@ -1,5 +1,13 @@
-import type { JobStatus, JobType, ProcessingJob, SubscriptionPlan, SubscriptionStatus } from '@merkwacht/domain';
+import {
+  deriveImportDayStatuses,
+  type JobStatus,
+  type JobType,
+  type ProcessingJob,
+  type SubscriptionPlan,
+  type SubscriptionStatus,
+} from '@merkwacht/domain';
 import { createId } from '@merkwacht/shared';
+import { DEMO_SECONDARY_ORG_ID } from '../org/org-store.js';
 
 /**
  * In-memory store backing `/api/platform/*` (see `routes/platform.ts`),
@@ -79,6 +87,19 @@ export interface PlatformJobRecord extends ProcessingJob {
   readonly triggeredBy: string;
 }
 
+export interface PlatformImportSyncRecord {
+  readonly registryCode: string;
+  readonly displayNameNl: string;
+  readonly purpose: 'watch' | 'name_research';
+  readonly lastSyncAt: string | null;
+  readonly lastStatus: 'succeeded' | 'failed' | 'never';
+  readonly lastFetchedCount: number | null;
+  readonly affectedOrganizationIds: readonly string[];
+  readonly yesterdayStatus: 'ok' | 'fail' | 'pending' | 'never';
+  readonly todayStatus: 'ok' | 'fail' | 'pending' | 'never';
+  readonly cadenceNl: string;
+}
+
 export interface TriggerJobInput {
   readonly type: JobType;
   readonly registryCode?: string | null;
@@ -100,12 +121,14 @@ export class PlatformStore {
   private readonly auditLog: PlatformAuditLogEntry[] = [];
   private readonly featureFlags = new Map<string, PlatformFeatureFlagRecord>();
   private readonly jobs = new Map<string, PlatformJobRecord>();
+  private readonly importSyncs: PlatformImportSyncRecord[] = [];
 
   constructor(primaryCustomerId: string) {
     this.seedCustomers(primaryCustomerId);
     this.seedFeatureFlags();
     this.seedAiUsage(primaryCustomerId);
     this.seedJobs();
+    this.seedImportSyncs(primaryCustomerId);
   }
 
   private seedCustomers(primaryCustomerId: string): void {
@@ -113,17 +136,17 @@ export class PlatformStore {
     const seed: PlatformCustomerRecord[] = [
       {
         id: primaryCustomerId,
-        name: 'Voorbeeld Merkenbureau B.V.',
-        plan: 'pro',
+        name: 'Lumaro B.V.',
+        plan: 'starter',
         status: 'active',
         renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: now,
         updatedAt: now,
       },
       {
-        id: createId(),
+        id: DEMO_SECONDARY_ORG_ID,
         name: 'Fictieve Retail Groep B.V.',
-        plan: 'starter',
+        plan: 'pro',
         status: 'trialing',
         renewsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: now,
@@ -140,6 +163,60 @@ export class PlatformStore {
       },
     ];
     for (const customer of seed) this.customers.set(customer.id, customer);
+  }
+
+  private seedImportSyncs(primaryCustomerId: string): void {
+    const now = Date.now();
+    const rows: Omit<PlatformImportSyncRecord, 'yesterdayStatus' | 'todayStatus' | 'cadenceNl'>[] = [
+      {
+        registryCode: 'BOIP',
+        displayNameNl: 'Benelux (BOIP)',
+        purpose: 'watch',
+        lastSyncAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+        lastStatus: 'succeeded',
+        lastFetchedCount: 128,
+        affectedOrganizationIds: [primaryCustomerId, DEMO_SECONDARY_ORG_ID],
+      },
+      {
+        registryCode: 'BOIP',
+        displayNameNl: 'Benelux (BOIP)',
+        purpose: 'name_research',
+        lastSyncAt: new Date(now - 6 * 60 * 60 * 1000).toISOString(),
+        lastStatus: 'succeeded',
+        lastFetchedCount: 42,
+        affectedOrganizationIds: [primaryCustomerId],
+      },
+      {
+        registryCode: 'EUIPO',
+        displayNameNl: 'EUIPO',
+        purpose: 'watch',
+        lastSyncAt: null,
+        lastStatus: 'never',
+        lastFetchedCount: null,
+        affectedOrganizationIds: [],
+      },
+      {
+        registryCode: 'EUIPO',
+        displayNameNl: 'EUIPO',
+        purpose: 'name_research',
+        lastSyncAt: new Date(now - 26 * 60 * 60 * 1000).toISOString(),
+        lastStatus: 'failed',
+        lastFetchedCount: null,
+        affectedOrganizationIds: [DEMO_SECONDARY_ORG_ID],
+      },
+    ];
+    for (const row of rows) this.importSyncs.push(this.withDayStatuses(row));
+  }
+
+  private withDayStatuses(
+    row: Omit<PlatformImportSyncRecord, 'yesterdayStatus' | 'todayStatus' | 'cadenceNl'>,
+  ): PlatformImportSyncRecord {
+    const days = deriveImportDayStatuses(row);
+    return {
+      ...row,
+      ...days,
+      cadenceNl: row.purpose === 'watch' ? 'Dagelijks' : 'Op aanvraag',
+    };
   }
 
   private seedFeatureFlags(): void {
@@ -328,6 +405,35 @@ export class PlatformStore {
     const jobs = [...this.jobs.values()];
     const filtered = filter.status ? jobs.filter((job) => job.status === filter.status) : jobs;
     return filtered.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
+  }
+
+  listImportSyncs(): readonly PlatformImportSyncRecord[] {
+    return this.importSyncs.map((row) => this.withDayStatuses(row));
+  }
+
+  recordImportSync(input: {
+    registryCode: string;
+    displayNameNl: string;
+    purpose: 'watch' | 'name_research';
+    status: 'succeeded' | 'failed';
+    fetchedCount: number | null;
+    affectedOrganizationIds?: readonly string[];
+  }): PlatformImportSyncRecord {
+    const idx = this.importSyncs.findIndex(
+      (r) => r.registryCode === input.registryCode && r.purpose === input.purpose,
+    );
+    const next = this.withDayStatuses({
+      registryCode: input.registryCode,
+      displayNameNl: input.displayNameNl,
+      purpose: input.purpose,
+      lastSyncAt: nowIso(),
+      lastStatus: input.status,
+      lastFetchedCount: input.fetchedCount,
+      affectedOrganizationIds: input.affectedOrganizationIds ?? [],
+    });
+    if (idx >= 0) this.importSyncs[idx] = next;
+    else this.importSyncs.push(next);
+    return next;
   }
 
   getJob(id: string): PlatformJobRecord | null {

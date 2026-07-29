@@ -26,9 +26,10 @@ together. For package-level dependency rules, see
 ## Deployables
 
 ```
-apps/web      Next.js application. Hosts two logically separate areas:
+apps/web      Vue application. Hosts two logically separate areas:
               - /app       customer-facing dashboard (watched trademarks, matches)
-              - /platform  internal operator console (connector health, jobs, billing)
+              - /platform  internal operator console — see `docs/product/platform-ia.md`
+                           (Systeem catalogus vs Operatie runtime vs Klantprofiel)
 apps/api      HTTP/RPC layer in front of Supabase Postgres. Owns authorization,
               request validation, and orchestration for synchronous operations
               (CRUD on watched trademarks, exports, subscription management).

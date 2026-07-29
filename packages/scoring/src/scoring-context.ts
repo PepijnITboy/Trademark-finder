@@ -1,4 +1,4 @@
-import type { CandidateApplication, WatchedTrademark } from '@merkwacht/domain';
+import type { CandidateApplication, ClassificationSchemeId, WatchedTrademark } from '@merkwacht/domain';
 import type { NormalizedMarkRepresentations } from '@merkwacht/normalization';
 import type { PhoneticRepresentation } from '@merkwacht/phonetics';
 
@@ -15,4 +15,7 @@ export interface ScoringContext {
   readonly candidateNormalized: NormalizedMarkRepresentations;
   readonly watchedPhonetic: readonly PhoneticRepresentation[];
   readonly candidatePhonetic: readonly PhoneticRepresentation[];
+  /** Optional override; defaults from register catalog when omitted. */
+  readonly watchedClassificationSchemeId?: ClassificationSchemeId;
+  readonly candidateClassificationSchemeId?: ClassificationSchemeId;
 }

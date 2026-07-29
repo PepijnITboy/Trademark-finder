@@ -1,138 +1,66 @@
 <script setup lang="ts">
-import MwBanner from '../../components/MwBanner.vue';
+import { useRouter } from 'vue-router';
+import DataTable, { type DataTableColumn } from '../../components/DataTable.vue';
 import MwCard from '../../components/MwCard.vue';
-import SkeletonBlock from '../../components/SkeletonBlock.vue';
 import StatusBadge from '../../components/StatusBadge.vue';
-import { useOrganizationMembers, useOrganizationProfile } from '../../api/organization';
-import {
-  formatScopeSummary,
-  usePlatformNameResearchOrders,
-  useNameResearchCredits,
-} from '../../api/name-research';
-import { useSubscription } from '../../api/subscription';
-import { useWatchedTrademarks } from '../../api/watched-trademarks';
+import { usePlatformOrganizations } from '../../api/platform-org';
+import type { PlatformOrganizationListItem } from '../../api/types';
+import { formatDate } from '../../lib/format';
 import PlatformPageHeader from './PlatformPageHeader.vue';
 
-const profileQuery = useOrganizationProfile();
-const membersQuery = useOrganizationMembers();
-const subscriptionQuery = useSubscription();
-const watchedQuery = useWatchedTrademarks();
-const researchOrdersQuery = usePlatformNameResearchOrders();
-const researchCreditsQuery = useNameResearchCredits();
+const router = useRouter();
+const orgsQuery = usePlatformOrganizations();
 
-const activeWatches = () =>
-  (watchedQuery.data.value ?? []).filter((w) => w.status === 'active').length;
+const columns: readonly DataTableColumn<PlatformOrganizationListItem>[] = [
+  { key: 'legalName', label: 'Klant' },
+  { key: 'plan', label: 'Plan', width: '8rem' },
+  { key: 'status', label: 'Status', width: '9rem' },
+  { key: 'since', label: 'Sinds', width: '9rem' },
+  { key: 'openInvoiceCount', label: 'Open facturen', width: '8rem', align: 'right' },
+  { key: 'watchedTrademarkCount', label: 'Merken', width: '7rem', align: 'right' },
+  { key: 'memberCount', label: 'Users', width: '6rem', align: 'right' },
+];
+
+function statusTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (status === 'active') return 'success';
+  if (status === 'trialing') return 'warning';
+  if (status === 'past_due') return 'danger';
+  return 'neutral';
+}
+
+function goToDetail(row: PlatformOrganizationListItem): void {
+  void router.push({ name: 'platform-klant-detail', params: { orgId: row.id } });
+}
 </script>
 
 <template>
   <PlatformPageHeader
     title="Klanten"
-    description="Klantorganisatie met doorgespeelde gegevens uit de klantomgeving (demo: één org)."
+    description="Overzicht van alle klantorganisaties. Open een rij voor het volledige klantprofiel."
   >
-    <MwCard title="Organisatieprofiel">
-      <SkeletonBlock v-if="profileQuery.isLoading.value" height="6rem" />
-      <MwBanner v-else-if="profileQuery.isError.value" tone="danger" title="Organisatie kon niet worden geladen" />
-      <dl v-else-if="profileQuery.data.value" class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <dt class="text-xs font-medium text-text-muted">Naam</dt>
-          <dd class="mt-0.5 font-medium text-text">{{ profileQuery.data.value.legalName }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-text-muted">KVK</dt>
-          <dd class="mt-0.5 text-sm text-text">{{ profileQuery.data.value.kvkNumber || '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-text-muted">Contact-e-mail</dt>
-          <dd class="mt-0.5 text-sm text-text">{{ profileQuery.data.value.contactEmail || '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-text-muted">Facturatie-e-mail</dt>
-          <dd class="mt-0.5 text-sm text-text">{{ profileQuery.data.value.billingEmail || '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-text-muted">Telefoon</dt>
-          <dd class="mt-0.5 text-sm text-text">{{ profileQuery.data.value.phone || '—' }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-text-muted">Adres</dt>
-          <dd class="mt-0.5 text-sm text-text">
-            {{
-              [profileQuery.data.value.addressLine, profileQuery.data.value.postalCode, profileQuery.data.value.city]
-                .filter(Boolean)
-                .join(', ') || '—'
-            }}
-          </dd>
-        </div>
-      </dl>
-    </MwCard>
-
-    <div class="grid gap-4 lg:grid-cols-2">
-      <MwCard title="Abonnement">
-        <SkeletonBlock v-if="subscriptionQuery.isLoading.value" height="3rem" />
-        <template v-else-if="subscriptionQuery.data.value">
-          <p class="text-sm text-text">
-            Plan:
-            <span class="font-semibold capitalize">{{ subscriptionQuery.data.value.subscription.plan }}</span>
-          </p>
-          <p class="mt-1 text-sm text-text-muted">Status: {{ subscriptionQuery.data.value.subscription.status }}</p>
-          <p class="mt-2 text-xs text-text-muted">
-            Limiet merken: {{ subscriptionQuery.data.value.entitlements.maxWatchedTrademarks }} · Actief:
-            {{ activeWatches() }}
-          </p>
-          <p v-if="watchedQuery.data.value?.[0]?.watchSettings" class="mt-2 text-xs text-text-muted">
-            Voorbeeld drempel:
-            {{ watchedQuery.data.value[0].watchSettings.minScoreThreshold }}% · Registers:
-            {{ watchedQuery.data.value[0].watchSettings.watchedRegisters?.join(', ') || 'BOIP' }}
-          </p>
-        </template>
-      </MwCard>
-
-      <MwCard title="Gebruikers">
-        <ul v-if="membersQuery.data.value?.length" class="divide-y divide-border">
-          <li
-            v-for="m in membersQuery.data.value"
-            :key="m.id"
-            class="flex items-center justify-between gap-2 py-2 text-sm"
-          >
-            <span>
-              <span class="font-medium text-text">{{ m.displayName }}</span>
-              <span class="block text-xs text-text-muted">{{ m.email }}</span>
-            </span>
-            <StatusBadge :label="m.role" tone="neutral" />
-          </li>
-        </ul>
-        <p v-else class="text-sm text-text-muted">Geen leden geladen.</p>
-      </MwCard>
-    </div>
-
-    <MwCard title="Merkonderzoek (deze klant)">
-      <p class="text-sm text-text">
-        Credits:
-        <span class="font-semibold tabular-nums">{{ researchCreditsQuery.data.value?.balance ?? '—' }}</span>
-        · gebruikt: {{ researchCreditsQuery.data.value?.usedThisPeriod ?? 0 }}
-      </p>
-      <ul
-        v-if="researchOrdersQuery.data.value?.length"
-        class="mt-3 divide-y divide-border"
+    <MwCard :padding="false">
+      <DataTable
+        embedded
+        :columns="columns"
+        :rows="orgsQuery.data.value ?? []"
+        :row-key="(row) => row.id"
+        :loading="orgsQuery.isLoading.value"
+        clickable-rows
+        empty-title="Geen klanten"
+        empty-description="Er zijn nog geen organisaties in de demo-seed."
+        @row-click="goToDetail"
       >
-        <li
-          v-for="order in researchOrdersQuery.data.value.slice(0, 8)"
-          :key="order.id"
-          class="flex items-center justify-between gap-2 py-2 text-sm"
-        >
-          <span>
-            <span class="font-medium">{{ order.markText }}</span>
-            <span class="block text-xs text-text-muted">
-              {{ formatScopeSummary(order.scopes) }} · {{ order.status }}
-            </span>
-          </span>
-          <StatusBadge
-            :label="order.creditUsed ? 'credit' : `${(order.priceCents / 100).toFixed(0)}€`"
-            tone="neutral"
-          />
-        </li>
-      </ul>
-      <p v-else class="mt-2 text-sm text-text-muted">Nog geen merkonderzoek-orders.</p>
+        <template #cell-legalName="{ row }">
+          <span class="font-medium text-text">{{ row.legalName }}</span>
+        </template>
+        <template #cell-plan="{ row }">
+          <span class="capitalize">{{ row.plan }}</span>
+        </template>
+        <template #cell-status="{ row }">
+          <StatusBadge :label="row.status" :tone="statusTone(row.status)" />
+        </template>
+        <template #cell-since="{ row }">{{ formatDate(row.since) }}</template>
+      </DataTable>
     </MwCard>
   </PlatformPageHeader>
 </template>

@@ -7,3 +7,6 @@ export { DOSSIER_LEGAL_DISCLAIMER_NL, renderDossierHtml } from './dossier-html';
 export type { DossierData, DossierMatch } from './dossier-html';
 
 export { renderDossierPdf } from './dossier-pdf';
+
+export { renderInvoicePdf, renderInvoiceUblXml } from './invoice';
+export type { InvoiceExportData } from './invoice';

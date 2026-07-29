@@ -41,7 +41,10 @@ const isActive = computed(() => isActiveMatchStatus(props.match.status));
         <div class="mt-1 flex items-center gap-3 text-sm">
           <span class="text-text-muted">Score</span>
           <span class="font-semibold tabular-nums text-text">{{ formatMatchScorePercent(match.totalScore) }}</span>
-          <DeadlineIndicator :days-remaining="daysRemaining" />
+          <DeadlineIndicator
+            :days-remaining="daysRemaining"
+            :deadline-date="match.candidate.oppositionDeadline?.deadlineDate"
+          />
         </div>
       </div>
       <div class="flex flex-wrap gap-2">

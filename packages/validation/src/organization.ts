@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { digestFrequencySchema } from './settings.js';
+import { digestCadenceSchema, notifyModeSchema } from './settings.js';
 
 const nlPhoneSchema = z
   .string()
@@ -50,17 +50,43 @@ export const updateMemberSchema = z.object({
   phone: nlPhoneSchema.nullable().optional(),
 });
 
-export const notificationRecipientSchema = z.object({
-  email: z.string().email('Ongeldig e-mailadres.'),
-  digestFrequency: digestFrequencySchema.default('DAILY'),
-  minScoreThreshold: z.number().min(0).max(100).default(50),
-  watchedTrademarkIds: z.array(z.string().uuid()).optional(),
-  allWatches: z.boolean().default(true),
-});
+export const notificationRecipientSchema = z
+  .object({
+    email: z.string().email('Ongeldig e-mailadres.'),
+    mode: notifyModeSchema.default('digest'),
+    digestCadence: digestCadenceSchema.nullable().optional(),
+    minScoreThreshold: z.number().min(0).max(100).nullable().optional(),
+    /** @deprecated Prefer mode + digestCadence */
+    digestFrequency: digestCadenceSchema.optional(),
+    watchedTrademarkIds: z.array(z.string().uuid()).optional(),
+    allWatches: z.boolean().default(true),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode === 'threshold') {
+      if (value.minScoreThreshold == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Kies een minimale score (%) voor drempelmeldingen.',
+          path: ['minScoreThreshold'],
+        });
+      }
+    } else {
+      const cadence = value.digestCadence ?? value.digestFrequency;
+      if (!cadence) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Kies een rapportfrequentie.',
+          path: ['digestCadence'],
+        });
+      }
+    }
+  });
 
 export const updateNotificationRecipientSchema = z.object({
-  digestFrequency: digestFrequencySchema.optional(),
-  minScoreThreshold: z.number().min(0).max(100).optional(),
+  mode: notifyModeSchema.optional(),
+  digestCadence: digestCadenceSchema.nullable().optional(),
+  minScoreThreshold: z.number().min(0).max(100).nullable().optional(),
+  digestFrequency: digestCadenceSchema.optional(),
   isActive: z.boolean().optional(),
   watchedTrademarkIds: z.array(z.string().uuid()).optional(),
   allWatches: z.boolean().optional(),

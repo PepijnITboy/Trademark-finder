@@ -21,13 +21,14 @@ Enforcement (domain + API):
 
 Bron van waarheid in code: `packages/domain/src/subscriptions.ts` (`DEFAULT_PLAN_CATALOG`).
 
-## Merkonderzoek-credits
+Plannen kunnen via platform **Uitzetten** (`is_active = false`); uitgezette plannen zijn niet kiesbaar voor nieuwe of gewijzigde abonnementen (`listActivePlans` / `changePlan`).
+
+## Merkonderzoek-betaling
 
 Los van abonnementslimieten (bewaakte merken / e-mails):
 
-- Standaard start een demo-organisatie met **1 credit**
-- **1 credit = 1 volledige merkonderzoek-order** (alle gekozen registers in die order)
-- Zonder credit: Stripe Checkout purpose `name_research_order` (iDEAL/kaart)
-- Verbruik zichtbaar op `/app/abonnement` en platform `/platform/merkonderzoek` + klantendetail
+- Elk betaald merkonderzoek creëert een **factuurrij** zichtbaar onder Betalingen
+- Product-UX: rapportenoverzicht + betalen per order (geen credit-saldo in de UI)
+- Platform kan facturen markeren als betaald met **verplichte interne notitie** (niet zichtbaar voor de klant)
 
-Zie `docs/product/merkonderzoek.md`.
+Zie `docs/product/merkonderzoek.md` en `docs/product/platform-ia.md`.

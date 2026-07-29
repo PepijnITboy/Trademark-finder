@@ -6,6 +6,9 @@ export interface RegisterCatalogRecord {
   readonly code: string;
   readonly displayNameNl: string;
   readonly regionNl: string;
+  readonly continent?: string;
+  readonly classificationSchemeId?: string;
+  readonly authMode?: string;
   readonly connectorStatus: 'live' | 'coming_soon' | 'disabled';
   readonly basePriceCents: number;
   readonly enabledForWatch: boolean;

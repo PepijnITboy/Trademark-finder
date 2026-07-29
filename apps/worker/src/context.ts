@@ -1,41 +1,36 @@
 import { OpenAiAssessmentProvider } from '@merkwacht/ai';
 import type { WorkerEnv } from '@merkwacht/config';
+import { resolveAiProvider } from '@merkwacht/domain';
 import { createJobStore, JobStore } from '@merkwacht/database';
 import { createLogger } from '@merkwacht/logging';
-import { createBoipConnector, type TrademarkRegisterConnector } from '@merkwacht/register-connectors';
+import { createAllConnectors, type TrademarkRegisterConnector } from '@merkwacht/register-connectors';
 import type { AiEnrichmentPort } from '@merkwacht/scoring';
 import type { PipelineContext } from './pipelines/types.js';
 
 /**
- * Builds every register connector currently supported. Only BOIP exists
- * today (see `@merkwacht/register-connectors`'s `REGISTER_CODES`) - adding
- * a connector here is the only change needed for pipelines to pick it up,
- * since they're written against `PipelineContext.connectors`, never a
- * concrete connector type.
+ * Builds every register connector currently supported via
+ * `createAllConnectors` (BOIP/EUIPO/USPTO/WIPO deep + ~35 HTTP adapters).
  */
-function createConnectors(env: WorkerEnv): ReadonlyMap<string, TrademarkRegisterConnector> {
-  const boip = createBoipConnector({
-    apiBaseUrl: env.BOIP_API_BASE_URL,
-    apiKey: env.BOIP_API_KEY,
-    useFixtures: env.BOIP_USE_FIXTURES,
-  });
-  return new Map([[boip.registryCode, boip]]);
+function createConnectors(_env: WorkerEnv): ReadonlyMap<string, TrademarkRegisterConnector> {
+  return createAllConnectors();
 }
 
 /**
- * Builds the optional AI enrichment port. `undefined` (not a disabled
- * stub) when `OPENAI_API_KEY` is unset, matching
- * `@merkwacht/scoring.scoreMatch`'s "fully functional without AI" contract
- * - see `docs/scoring/ai-layer.md`. Wires the provider's usage callback
- * onto `jobStore`'s AI usage ledger so `checkMonthlyBudget` sees real
- * spend on the next call.
+ * Builds the optional AI enrichment port from configured provider keys.
+ * Missing / unsupported active provider ⇒ `undefined` (graceful degrade).
  */
-function createAiEnrichmentPort(env: WorkerEnv, jobStore: JobStore): AiEnrichmentPort | undefined {
-  if (!env.OPENAI_API_KEY) {
+export function createAiEnrichmentPort(env: WorkerEnv, jobStore: JobStore): AiEnrichmentPort | undefined {
+  const resolved = resolveAiProvider({
+    activeProvider: env.AI_ACTIVE_PROVIDER ?? 'openai',
+    openaiKey: env.OPENAI_API_KEY,
+    anthropicKey: env.ANTHROPIC_API_KEY,
+    googleKey: env.GOOGLE_AI_API_KEY,
+  });
+  if (!resolved.enrichmentAvailable || !resolved.apiKey || resolved.provider !== 'openai') {
     return undefined;
   }
   return new OpenAiAssessmentProvider({
-    apiKey: env.OPENAI_API_KEY,
+    apiKey: resolved.apiKey,
     getMonthlyUsageEur: (scope) => jobStore.getMonthlyUsageEur(scope),
     onUsageRecorded: (usage) => {
       jobStore.recordAiUsage({

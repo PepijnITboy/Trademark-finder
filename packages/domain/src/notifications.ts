@@ -37,6 +37,18 @@ export type NotificationPayload =
       readonly type: 'ai_budget_exhausted';
       readonly monthlyBudgetEur: number;
       readonly spentEur: number;
+    }
+  | {
+      readonly type: 'report_ready';
+      readonly organizationId: string;
+      readonly nameResearchOrderId: string;
+      readonly markText: string;
+    }
+  | {
+      readonly type: 'invoice';
+      readonly organizationId: string;
+      readonly invoiceId: string;
+      readonly event: 'created' | 'paid';
     };
 
 /** A notification's type discriminant, useful for exhaustive switches/filters. */

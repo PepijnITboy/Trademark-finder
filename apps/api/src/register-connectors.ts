@@ -1,11 +1,8 @@
+import { createBoipConnector, createAllConnectors, type TrademarkRegisterConnector } from '@merkwacht/register-connectors';
 import type { ApiEnv } from '@merkwacht/config';
-import { createBoipConnector, type TrademarkRegisterConnector } from '@merkwacht/register-connectors';
 
 /**
- * Builds the BOIP connector from validated API environment. Kept as a
- * single factory (rather than each route constructing its own connector)
- * so `BOIP_USE_FIXTURES`/credentials are resolved consistently everywhere -
- * see `docs/connectors/boip.md`.
+ * Builds the BOIP connector from validated API environment (backward-compatible).
  */
 export function createBoipConnectorFromEnv(env: ApiEnv): TrademarkRegisterConnector {
   return createBoipConnector({
@@ -13,4 +10,9 @@ export function createBoipConnectorFromEnv(env: ApiEnv): TrademarkRegisterConnec
     apiKey: env.BOIP_API_KEY,
     useFixtures: env.BOIP_USE_FIXTURES,
   });
+}
+
+/** Full connector map for platform probe/sync when ready. */
+export function createConnectorsFromEnv(_env: ApiEnv): Map<string, TrademarkRegisterConnector> {
+  return createAllConnectors();
 }

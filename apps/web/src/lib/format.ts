@@ -33,9 +33,9 @@ export function formatDaysRemaining(days: number | null | undefined): string {
   // Approaching-deadline surfaces must never show "verstreken" — expired
   // matches belong in the archive with {@link formatDaysOverdue}.
   if (days < 0) return '—';
-  if (days === 0) return 'Vandaag verloopt de termijn';
-  if (days === 1) return '1 dag resterend';
-  return `${days} dagen resterend`;
+  if (days === 0) return 'Vandaag is de oppositiedeadline';
+  if (days === 1) return '1 dag tot oppositiedeadline';
+  return `${days} dagen tot oppositiedeadline`;
 }
 
 /** Copy for archived matches whose opposition window already closed. */

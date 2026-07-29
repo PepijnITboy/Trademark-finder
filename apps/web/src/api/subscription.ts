@@ -44,6 +44,28 @@ export function useChangePlan() {
   });
 }
 
+export function useCancelAtPeriodEnd() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiRequest<SubscriptionResponse>('/api/v1/subscription/cancel-at-period-end', { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscription.current });
+    },
+  });
+}
+
+export function useUndoCancelAtPeriodEnd() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiRequest<SubscriptionResponse>('/api/v1/subscription/undo-cancel-at-period-end', { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscription.current });
+    },
+  });
+}
+
 export const SUBSCRIPTION_STATUS_LABELS_NL = {
   trialing: 'Proefperiode',
   active: 'Actief',

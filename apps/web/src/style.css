@@ -16,6 +16,93 @@ body {
   font-family: var(--mw-font-family-base);
 }
 
+/* Motion tokens */
+:root {
+  --mw-motion-fast: 120ms;
+  --mw-motion-base: 200ms;
+  --mw-motion-slow: 320ms;
+  --mw-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mw-wizard-dot--done .mw-wizard-dot-fill {
+  animation: mw-dot-fill var(--mw-motion-slow) var(--mw-motion-ease) both;
+}
+
+@keyframes mw-dot-fill {
+  from {
+    transform: scale(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.mw-step-enter-active,
+.mw-step-leave-active {
+  transition:
+    opacity var(--mw-motion-base) var(--mw-motion-ease),
+    transform var(--mw-motion-base) var(--mw-motion-ease);
+}
+
+.mw-step-enter-from {
+  opacity: 0;
+  transform: translateX(0.75rem);
+}
+
+.mw-step-leave-to {
+  opacity: 0;
+  transform: translateX(-0.5rem);
+}
+
+.mw-fade-enter-active,
+.mw-fade-leave-active {
+  transition: opacity var(--mw-motion-base) var(--mw-motion-ease);
+}
+
+.mw-fade-enter-from,
+.mw-fade-leave-to {
+  opacity: 0;
+}
+
+.mw-toast-enter-active,
+.mw-toast-leave-active {
+  transition:
+    opacity var(--mw-motion-fast) var(--mw-motion-ease),
+    transform var(--mw-motion-base) var(--mw-motion-ease);
+}
+
+.mw-toast-enter-from,
+.mw-toast-leave-to {
+  opacity: 0;
+  transform: translateY(0.5rem);
+}
+
+.mw-checkbox,
+.mw-chip {
+  transition:
+    border-color var(--mw-motion-fast) var(--mw-motion-ease),
+    background-color var(--mw-motion-fast) var(--mw-motion-ease),
+    color var(--mw-motion-fast) var(--mw-motion-ease),
+    transform var(--mw-motion-fast) var(--mw-motion-ease);
+}
+
+.mw-chip:active {
+  transform: scale(0.97);
+}
+
+.mw-btn-press {
+  transition:
+    background-color var(--mw-motion-fast) var(--mw-motion-ease),
+    opacity var(--mw-motion-fast) var(--mw-motion-ease),
+    transform var(--mw-motion-fast) var(--mw-motion-ease);
+}
+
+.mw-btn-press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -24,5 +111,12 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .mw-step-enter-from,
+  .mw-step-leave-to,
+  .mw-toast-enter-from,
+  .mw-toast-leave-to {
+    transform: none;
   }
 }

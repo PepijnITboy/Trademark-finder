@@ -10,8 +10,11 @@ import {
   formatDate,
   formatDaysOverdue,
   formatMatchScorePercent,
+  formatNiceClasses,
   overdueSeverity,
 } from '../../lib/format';
+import { MATCH_STATUS_LABELS_NL } from '../../api/matches';
+import DeadlineIndicator from '../../components/DeadlineIndicator.vue';
 import type { TrademarkMatchRecord } from '../../api/types';
 
 const router = useRouter();
@@ -25,17 +28,22 @@ const expired = computed(() =>
 );
 
 const matchColumns: readonly DataTableColumn<TrademarkMatchRecord>[] = [
-  { key: 'watched', label: 'Eigenmerk' },
-  { key: 'candidate', label: 'Match gevonden' },
+  { key: 'watched', label: 'Eigen merk' },
+  { key: 'candidate', label: 'Match' },
   { key: 'score', label: 'Score', align: 'right', width: '6rem' },
+  { key: 'niceClasses', label: 'Klassen', width: '8rem' },
+  { key: 'deadline', label: 'Deadline', width: '10rem' },
+  { key: 'status', label: 'Status', width: '10rem' },
   { key: 'updatedAt', label: 'Afgehandeld op', width: '10rem' },
 ];
 
 const expiredColumns: readonly DataTableColumn<TrademarkMatchRecord>[] = [
-  { key: 'watched', label: 'Eigenmerk' },
-  { key: 'candidate', label: 'Match gevonden' },
-  { key: 'overdue', label: 'Verstreken', width: '12rem' },
+  { key: 'watched', label: 'Eigen merk' },
+  { key: 'candidate', label: 'Match' },
   { key: 'score', label: 'Score', align: 'right', width: '6rem' },
+  { key: 'niceClasses', label: 'Klassen', width: '8rem' },
+  { key: 'deadline', label: 'Deadline', width: '10rem' },
+  { key: 'overdue', label: 'Status', width: '12rem' },
 ];
 
 function daysOverdue(match: TrademarkMatchRecord): number {
@@ -73,14 +81,23 @@ function goToMatch(record: TrademarkMatchRecord): void {
         <template #cell-watched="{ row }">{{ row.watchedTrademarkLabel }}</template>
         <template #cell-candidate="{ row }">
           <span class="font-medium">{{ row.candidate.markText }}</span>
-          <StatusBadge label="Niet relevant" tone="neutral" class="ml-2" />
         </template>
         <template #cell-score="{ row }">{{ formatMatchScorePercent(row.totalScore) }}</template>
+        <template #cell-niceClasses="{ row }">{{ formatNiceClasses(row.candidate.niceClasses) }}</template>
+        <template #cell-deadline="{ row }">
+          <DeadlineIndicator
+            :days-remaining="null"
+            :deadline-date="row.candidate.oppositionDeadline?.deadlineDate"
+          />
+        </template>
+        <template #cell-status="{ row }">
+          <StatusBadge :label="MATCH_STATUS_LABELS_NL[row.status]" tone="neutral" />
+        </template>
         <template #cell-updatedAt="{ row }">{{ formatDate(row.updatedAt) }}</template>
       </DataTable>
     </MwCard>
 
-    <MwCard title="Verstreken oppositietermijn" :padding="false">
+    <MwCard title="Verstreken oppositietermijn — niet meer aan te vechten" :padding="false">
       <DataTable
         embedded
         :columns="expiredColumns"
@@ -96,13 +113,20 @@ function goToMatch(record: TrademarkMatchRecord): void {
         <template #cell-candidate="{ row }">
           <span class="font-medium">{{ row.candidate.markText }}</span>
         </template>
+        <template #cell-score="{ row }">{{ formatMatchScorePercent(row.totalScore) }}</template>
+        <template #cell-niceClasses="{ row }">{{ formatNiceClasses(row.candidate.niceClasses) }}</template>
+        <template #cell-deadline="{ row }">
+          <DeadlineIndicator
+            :days-remaining="-daysOverdue(row)"
+            :deadline-date="row.candidate.oppositionDeadline?.deadlineDate"
+          />
+        </template>
         <template #cell-overdue="{ row }">
           <StatusBadge
             :label="formatDaysOverdue(daysOverdue(row))"
             :tone="severityTone(daysOverdue(row))"
           />
         </template>
-        <template #cell-score="{ row }">{{ formatMatchScorePercent(row.totalScore) }}</template>
       </DataTable>
     </MwCard>
   </MwPage>

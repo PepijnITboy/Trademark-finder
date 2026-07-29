@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
+import { resolveProtectionDisplay } from '@merkwacht/domain';
 import DataTable, { type DataTableColumn } from '../../components/DataTable.vue';
 import MwCard from '../../components/MwCard.vue';
 import MwPage from '../../components/MwPage.vue';
@@ -17,12 +18,20 @@ const columns: readonly DataTableColumn<WatchedTrademarkRecord>[] = [
   { key: 'registrationNumber', label: 'Depotnummer', width: '12rem' },
   { key: 'niceClasses', label: 'Nice-klassen', width: '10rem' },
   { key: 'status', label: 'Status', width: '9rem' },
-  { key: 'eligibility', label: 'Geschiktheid', width: '11rem' },
+  { key: 'eligibility', label: 'Bescherming', width: '12rem' },
   { key: 'createdAt', label: 'Toegevoegd op', width: '9rem' },
 ];
 
 function goToDetail(record: WatchedTrademarkRecord): void {
   void router.push({ name: 'app-watched-trademark-detail', params: { id: record.id } });
+}
+
+function protection(row: WatchedTrademarkRecord) {
+  return resolveProtectionDisplay({
+    status: row.status,
+    eligibility: row.eligibility,
+    registerMonitoringOk: row.registerMonitoringOk ?? false,
+  });
 }
 </script>
 
@@ -61,10 +70,10 @@ function goToDetail(record: WatchedTrademarkRecord): void {
           />
         </template>
         <template #cell-eligibility="{ row }">
-          <StatusBadge
-            :label="row.eligibility.eligible ? 'Geschikt' : 'Niet geschikt'"
-            :tone="row.eligibility.eligible ? 'success' : 'neutral'"
-          />
+          <div>
+            <StatusBadge :label="protection(row).labelNl" :tone="protection(row).tone" />
+            <span class="mt-0.5 block text-xs text-text-muted">{{ protection(row).detailNl }}</span>
+          </div>
         </template>
         <template #cell-createdAt="{ row }">{{ formatDate(row.createdAt) }}</template>
       </DataTable>

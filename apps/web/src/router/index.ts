@@ -81,6 +81,11 @@ export const router = createRouter({
           component: () => import('../pages/customer/NameResearchDetailPage.vue'),
         },
         {
+          path: 'meldingen',
+          name: 'app-meldingen',
+          component: () => import('../pages/customer/MeldingenInboxPage.vue'),
+        },
+        {
           path: 'instellingen',
           redirect: '/app/organisatie?tab=weergave',
         },
@@ -102,16 +107,25 @@ export const router = createRouter({
           component: () => import('../pages/platform/OverzichtPage.vue'),
         },
         { path: 'klanten', name: 'platform-klanten', component: () => import('../pages/platform/KlantenPage.vue') },
-        { path: 'accounts', name: 'platform-accounts', component: () => import('../pages/platform/AccountsPage.vue') },
+        {
+          path: 'klanten/:orgId',
+          name: 'platform-klant-detail',
+          component: () => import('../pages/platform/KlantDetailPage.vue'),
+        },
+        { path: 'accounts', redirect: '/platform/klanten' },
         {
           path: 'abonnementen',
           name: 'platform-abonnementen',
           component: () => import('../pages/platform/AbonnementenPage.vue'),
         },
         {
+          path: 'prijzen',
+          name: 'platform-prijzen',
+          component: () => import('../pages/platform/PrijzenPage.vue'),
+        },
+        {
           path: 'betalingen',
-          name: 'platform-betalingen',
-          component: () => import('../pages/platform/BetalingenPage.vue'),
+          redirect: '/platform/klanten',
         },
         {
           path: 'registers',
@@ -120,8 +134,7 @@ export const router = createRouter({
         },
         {
           path: 'merkonderzoek',
-          name: 'platform-merkonderzoek',
-          component: () => import('../pages/platform/NameResearchOpsPage.vue'),
+          redirect: '/platform/klanten',
         },
         { path: 'imports', name: 'platform-imports', component: () => import('../pages/platform/ImportsPage.vue') },
         {
@@ -131,8 +144,7 @@ export const router = createRouter({
         },
         {
           path: 'chat',
-          name: 'platform-chat',
-          component: () => import('../pages/platform/ChatPage.vue'),
+          redirect: '/platform/klanten',
         },
         { path: 'ai-kosten', name: 'platform-ai-kosten', component: () => import('../pages/platform/AiKostenPage.vue') },
         {
@@ -145,7 +157,7 @@ export const router = createRouter({
           name: 'platform-notificaties',
           component: () => import('../pages/platform/NotificatiesPage.vue'),
         },
-        { path: 'exports', name: 'platform-exports', component: () => import('../pages/platform/ExportsPage.vue') },
+        { path: 'exports', redirect: '/platform/klanten' },
         {
           path: 'systeeminstellingen',
           name: 'platform-systeeminstellingen',

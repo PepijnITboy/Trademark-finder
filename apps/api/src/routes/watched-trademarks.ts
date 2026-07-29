@@ -1,5 +1,7 @@
 import {
+  assertWatchThresholdCompatibleWithRecipients,
   boipV1WatchEligibilityPolicy,
+  thresholdFloorsForWatch,
   type RegisteredTrademarkSnapshot,
   type WatchEligibilityDecision,
 } from '@merkwacht/domain';
@@ -11,6 +13,7 @@ import { AppError } from '@merkwacht/shared';
 import { watchedTrademarkLookupSchema } from '@merkwacht/validation';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { enrichWatchedTrademark, enrichWatchedTrademarks } from '../org/enrich-watched-trademark.js';
 
 const createWatchedTrademarkSchema = z.object({
   label: z.string().trim().min(1, 'Label is verplicht.').max(300),
@@ -56,8 +59,8 @@ function toLookupCandidate(snapshot: RegisteredTrademarkSnapshot): LookupCandida
   };
 }
 
-function getOrganizationId(app: FastifyInstance): string {
-  return app.identityProvider.getIdentity().organizationId;
+function getOrganizationId(request: FastifyRequest): string {
+  return request.tenant!.organizationId;
 }
 
 function notFound(reply: FastifyReply, referenceCode: string): FastifyReply {
@@ -77,10 +80,10 @@ function notFound(reply: FastifyReply, referenceCode: string): FastifyReply {
  */
 export async function registerWatchedTrademarkRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async (request: FastifyRequest) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const watchedTrademarks = await app.store.listWatchedTrademarks(organizationId);
     app.appLogger.debug('Watched-merken opgehaald.', { correlationId: request.correlationId, count: watchedTrademarks.length });
-    return { watchedTrademarks };
+    return { watchedTrademarks: enrichWatchedTrademarks(app, watchedTrademarks) };
   });
 
   app.post('/lookup', async (request: FastifyRequest) => {
@@ -104,7 +107,7 @@ export async function registerWatchedTrademarkRoutes(app: FastifyInstance): Prom
   });
 
   app.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const input = createWatchedTrademarkSchema.parse(request.body);
 
     const existing = await app.store.listWatchedTrademarks(organizationId);
@@ -131,24 +134,45 @@ export async function registerWatchedTrademarkRoutes(app: FastifyInstance): Prom
       eligibility,
     });
 
-    return reply.status(201).send({ watchedTrademark: record });
+    return reply.status(201).send({ watchedTrademark: enrichWatchedTrademark(app, record) });
   });
 
   app.get('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const record = await app.store.getWatchedTrademark(organizationId, request.params.id);
     if (!record) return notFound(reply, request.correlationId ?? request.params.id);
-    return { watchedTrademark: record };
+    return { watchedTrademark: enrichWatchedTrademark(app, record) };
   });
 
   app.patch(
     '/:id/settings',
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const organizationId = getOrganizationId(app);
+      const organizationId = getOrganizationId(request);
       const patch = updateSettingsSchema.parse(request.body);
+      if (patch.minScoreThreshold !== undefined) {
+        const recipients = app.orgStore.listRecipients(organizationId);
+        const floors = thresholdFloorsForWatch(
+          recipients.map((r) => ({
+            mode: r.mode,
+            minScoreThreshold: r.minScoreThreshold,
+            isActive: r.isActive,
+            allWatches: r.watchedTrademarkIds.length === 0,
+            watchedTrademarkIds: r.watchedTrademarkIds,
+          })),
+          request.params.id,
+        );
+        const gate = assertWatchThresholdCompatibleWithRecipients(patch.minScoreThreshold, floors);
+        if (!gate.ok) {
+          return reply.status(400).send({
+            code: 'WATCH_THRESHOLD_INCOMPATIBLE',
+            messageNl: gate.message,
+            maxAllowed: gate.maxAllowed,
+          });
+        }
+      }
       const updated = await app.store.updateWatchedTrademarkSettings(organizationId, request.params.id, patch);
       if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
-      return { watchedTrademark: updated };
+      return { watchedTrademark: enrichWatchedTrademark(app, updated) };
     },
   );
 
@@ -163,10 +187,10 @@ function registerStatusTransition(
   status: 'paused' | 'active' | 'archived',
 ): void {
   app.post(`/:id/${action}`, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const updated = await app.store.setWatchedTrademarkStatus(organizationId, request.params.id, status);
     if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
-    return { watchedTrademark: updated };
+    return { watchedTrademark: enrichWatchedTrademark(app, updated) };
   });
 }
 

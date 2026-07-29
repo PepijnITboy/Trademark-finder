@@ -1,4 +1,5 @@
 import type { MatchStatus as DomainMatchStatus, WatchedTrademarkStatus } from '@merkwacht/domain';
+import { DEMO_BETA_IDS, DEV_SEED_IDS } from '@merkwacht/database';
 import { createId } from '@merkwacht/shared';
 import { buildDemoSeed } from './demo-data.js';
 import type {
@@ -17,10 +18,8 @@ import type {
 
 /**
  * In-memory `AppStore` implementation, seeded with fictitious demo data
- * (see `demo-data.ts`). Always available (no external dependency), used as
- * the default for local development and as the automatic fallback when
- * Postgres/Supabase is unreachable - see `create-store.ts`. State resets on
- * process restart; this is intentional, not a bug.
+ * (see `demo-data.ts`). Multi-org capable: each organizationId is seeded
+ * independently so tenancy tests can exercise OrgAlpha vs OrgBeta.
  */
 export class DemoStore implements AppStore {
   readonly kind = 'demo' as const;
@@ -29,20 +28,22 @@ export class DemoStore implements AppStore {
   private readonly matches = new Map<string, TrademarkMatchRecord>();
   private notifications: NotificationRecord[] = [];
   private settingsByOrg = new Map<string, OrganizationSettingsRecord>();
-  private seeded: Promise<void> | null = null;
+  private readonly seedPromises = new Map<string, Promise<void>>();
 
   private async ensureSeeded(organizationId: string): Promise<void> {
-    if (this.seeded) {
-      await this.seeded;
+    const existing = this.seedPromises.get(organizationId);
+    if (existing) {
+      await existing;
       return;
     }
-    this.seeded = buildDemoSeed(organizationId).then((seed) => {
+    const promise = buildDemoSeed(organizationId).then((seed) => {
       for (const watched of seed.watchedTrademarks) this.watchedTrademarks.set(watched.id, watched);
       for (const match of seed.matches) this.matches.set(match.id, match);
-      this.notifications = seed.notifications;
+      this.notifications = [...this.notifications, ...seed.notifications];
       this.settingsByOrg.set(organizationId, seed.settings);
     });
-    await this.seeded;
+    this.seedPromises.set(organizationId, promise);
+    await promise;
   }
 
   async listWatchedTrademarks(organizationId: string): Promise<readonly WatchedTrademarkRecord[]> {
@@ -226,7 +227,13 @@ export class DemoStore implements AppStore {
   }
 }
 
-/** Convenience factory - seeding happens lazily, scoped to whichever `organizationId` first calls a method. */
+/** Convenience factory — each org seeds independently on first access. */
 export function createDemoStore(): DemoStore {
   return new DemoStore();
 }
+
+/** Stable demo tenant ids for tenancy suites. */
+export const DEMO_STORE_TENANT_IDS = {
+  alpha: DEV_SEED_IDS.organizationId,
+  beta: DEMO_BETA_IDS.organizationId,
+} as const;

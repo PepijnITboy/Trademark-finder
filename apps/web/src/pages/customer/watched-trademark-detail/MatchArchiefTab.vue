@@ -20,11 +20,11 @@ const archived = computed(() =>
 );
 
 const columns: readonly DataTableColumn<TrademarkMatchRecord>[] = [
-  { key: 'candidate', label: 'Kandidaat-aanvraag' },
+  { key: 'candidate', label: 'Match' },
   { key: 'status', label: 'Status', width: '9rem' },
   { key: 'niceClasses', label: 'Klassen', width: '8rem' },
   { key: 'score', label: 'Score', align: 'right', width: '5rem' },
-  { key: 'deadline', label: 'Termijn', width: '8rem' },
+  { key: 'deadline', label: 'Deadline', width: '8rem' },
 ];
 
 function daysRemaining(match: TrademarkMatchRecord): number | null {
@@ -58,7 +58,10 @@ function goTo(match: TrademarkMatchRecord): void {
     <template #cell-niceClasses="{ row }">{{ formatNiceClasses(row.candidate.niceClasses) }}</template>
     <template #cell-score="{ row }">{{ row.totalScore }}</template>
     <template #cell-deadline="{ row }">
-      <DeadlineIndicator :days-remaining="daysRemaining(row)" />
+      <DeadlineIndicator
+        :days-remaining="daysRemaining(row)"
+        :deadline-date="row.candidate.oppositionDeadline?.deadlineDate"
+      />
     </template>
   </DataTable>
 </template>

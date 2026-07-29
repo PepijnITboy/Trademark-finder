@@ -64,7 +64,7 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
       });
     }
 
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const body = checkoutBodySchema.parse(request.body);
     const origin = checkoutOrigin(app.appEnv);
 

@@ -6,8 +6,13 @@ export type { Jurisdiction, WatchedTrademarkCreateInput, WatchedTrademarkLookupI
 export { matchStatusSchema, matchStatusUpdateSchema } from './matches';
 export type { MatchStatus, MatchStatusUpdateInput } from './matches';
 
-export { digestFrequencySchema, organizationSettingsSchema } from './settings';
-export type { DigestFrequency, OrganizationSettingsInput } from './settings';
+export {
+  digestCadenceSchema,
+  digestFrequencySchema,
+  notifyModeSchema,
+  organizationSettingsSchema,
+} from './settings';
+export type { DigestCadence, DigestFrequency, NotifyMode, OrganizationSettingsInput } from './settings';
 
 export {
   candidateApplicationInputSchema,

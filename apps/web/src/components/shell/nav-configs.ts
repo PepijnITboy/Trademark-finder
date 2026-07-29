@@ -97,6 +97,14 @@ export const customerNavConfig: NavConfig = {
         },
       ],
     },
+    {
+      type: 'leaf',
+      id: 'meldingen-inbox',
+      label: 'Meldingen',
+      to: '/app/meldingen',
+      icon: 'notifications',
+      matchPrefix: '/app/meldingen',
+    },
   ],
   footer: [
     {
@@ -136,7 +144,7 @@ export const platformNavConfig: NavConfig = {
   brandTitle: 'Merkwacht',
   badge: 'Platformbeheer',
   topbarLabel: 'Interne beheeromgeving',
-  storageKey: 'mw-nav-open-platform',
+  storageKey: 'mw-nav-open-platform-v2',
   entries: [
     {
       type: 'leaf',
@@ -160,27 +168,6 @@ export const platformNavConfig: NavConfig = {
           to: '/platform/klanten',
           matchPrefix: '/platform/klanten',
         },
-        {
-          type: 'leaf',
-          id: 'accounts',
-          label: 'Accounts',
-          to: '/platform/accounts',
-          matchPrefix: '/platform/accounts',
-        },
-        {
-          type: 'leaf',
-          id: 'abonnementen',
-          label: 'Abonnementen',
-          to: '/platform/abonnementen',
-          matchPrefix: '/platform/abonnementen',
-        },
-        {
-          type: 'leaf',
-          id: 'betalingen',
-          label: 'Betalingen',
-          to: '/platform/betalingen',
-          matchPrefix: '/platform/betalingen',
-        },
       ],
     },
     {
@@ -199,13 +186,6 @@ export const platformNavConfig: NavConfig = {
         },
         {
           type: 'leaf',
-          id: 'merkonderzoek-ops',
-          label: 'Merkonderzoek',
-          to: '/platform/merkonderzoek',
-          matchPrefix: '/platform/merkonderzoek',
-        },
-        {
-          type: 'leaf',
           id: 'imports',
           label: 'Imports en verwerking',
           to: '/platform/imports',
@@ -220,15 +200,8 @@ export const platformNavConfig: NavConfig = {
         },
         {
           type: 'leaf',
-          id: 'platform-chat',
-          label: 'Merkrechtenchat',
-          to: '/platform/chat',
-          matchPrefix: '/platform/chat',
-        },
-        {
-          type: 'leaf',
           id: 'ai-kosten',
-          label: 'AI en kosten',
+          label: 'Koppelingen AI',
           to: '/platform/ai-kosten',
           matchPrefix: '/platform/ai-kosten',
         },
@@ -246,13 +219,6 @@ export const platformNavConfig: NavConfig = {
           to: '/platform/notificaties',
           matchPrefix: '/platform/notificaties',
         },
-        {
-          type: 'leaf',
-          id: 'exports',
-          label: 'Exports en opslag',
-          to: '/platform/exports',
-          matchPrefix: '/platform/exports',
-        },
       ],
     },
     {
@@ -262,6 +228,20 @@ export const platformNavConfig: NavConfig = {
       icon: 'system',
       defaultOpen: false,
       children: [
+        {
+          type: 'leaf',
+          id: 'abonnementen',
+          label: 'Abonnementen Merkwacht',
+          to: '/platform/abonnementen',
+          matchPrefix: '/platform/abonnementen',
+        },
+        {
+          type: 'leaf',
+          id: 'prijzen',
+          label: 'Prijzen merken',
+          to: '/platform/prijzen',
+          matchPrefix: '/platform/prijzen',
+        },
         {
           type: 'leaf',
           id: 'systeeminstellingen',

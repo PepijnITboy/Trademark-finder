@@ -9,9 +9,9 @@ import {
 describe('formatDaysRemaining', () => {
   it('never phrases approaching deadlines as verstreken', () => {
     expect(formatDaysRemaining(-5)).toBe('—');
-    expect(formatDaysRemaining(0)).toBe('Vandaag verloopt de termijn');
-    expect(formatDaysRemaining(1)).toBe('1 dag resterend');
-    expect(formatDaysRemaining(12)).toBe('12 dagen resterend');
+    expect(formatDaysRemaining(0)).toBe('Vandaag is de oppositiedeadline');
+    expect(formatDaysRemaining(1)).toBe('1 dag tot oppositiedeadline');
+    expect(formatDaysRemaining(12)).toBe('12 dagen tot oppositiedeadline');
   });
 });
 

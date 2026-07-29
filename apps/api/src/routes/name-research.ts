@@ -32,8 +32,8 @@ export async function registerNameResearchRoutes(app: FastifyInstance): Promise<
     return { registers };
   });
 
-  app.get('/credits', async () => {
-    const organizationId = getOrganizationId(app);
+  app.get('/credits', async (request) => {
+    const organizationId = getOrganizationId(request);
     return { credits: app.nameResearchStore.getCredits(organizationId) };
   });
 
@@ -50,13 +50,13 @@ export async function registerNameResearchRoutes(app: FastifyInstance): Promise<
     }
   });
 
-  app.get('/orders', async () => {
-    const organizationId = getOrganizationId(app);
+  app.get('/orders', async (request) => {
+    const organizationId = getOrganizationId(request);
     return { orders: app.nameResearchStore.listOrders(organizationId) };
   });
 
   app.get('/orders/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const order = app.nameResearchStore.getOrder(organizationId, request.params.id);
     if (!order) {
       return reply.status(404).send({
@@ -69,7 +69,7 @@ export async function registerNameResearchRoutes(app: FastifyInstance): Promise<
   });
 
   app.post('/orders', async (request: FastifyRequest, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const body = createOrderSchema.parse(request.body);
     let created;
     try {
@@ -92,15 +92,26 @@ export async function registerNameResearchRoutes(app: FastifyInstance): Promise<
       return reply.status(201).send({ order: created.order, checkoutUrl: null });
     }
 
+    // Paid name research always creates a visible invoice row.
+    const researchInvoice = app.orgStore.createInvoice(organizationId, {
+      amountCents: created.totalCents,
+      description: `Merkonderzoek: ${created.order.markText}`,
+      status: 'open',
+    });
+
     if (!app.billingProvider.configured) {
       const completed = app.nameResearchStore.markPaid(
         created.order.id,
         `local-demo-${created.order.id}`,
       );
+      app.orgStore.markInvoicePaid(organizationId, researchInvoice.id, {
+        internalNote: 'Demo: automatisch afgerond zonder Stripe',
+      });
       return reply.status(201).send({
         order: completed ?? created.order,
         checkoutUrl: null,
         demoCompletedWithoutStripe: true,
+        invoiceId: researchInvoice.id,
       });
     }
 
@@ -122,11 +133,15 @@ export async function registerNameResearchRoutes(app: FastifyInstance): Promise<
     });
 
     const completed = app.nameResearchStore.markPaid(created.order.id, session.sessionId);
+    app.orgStore.markInvoicePaid(organizationId, researchInvoice.id, {
+      internalNote: `Checkout session ${session.sessionId}`,
+    });
 
     return reply.status(201).send({
       order: completed ?? created.order,
       checkoutUrl: null,
       mockCheckoutUrl: session.url,
+      invoiceId: researchInvoice.id,
     });
   });
 }

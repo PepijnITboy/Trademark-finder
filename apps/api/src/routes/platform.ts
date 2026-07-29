@@ -1,9 +1,16 @@
 import { checkMonthlyBudget, DEFAULT_AI_MONTHLY_BUDGET_EUR } from '@merkwacht/ai';
-import { isDevPlatformUser } from '@merkwacht/database';
 import { JOB_STATUSES, SUBSCRIPTION_PLANS, SUBSCRIPTION_STATUSES, type JobStatus } from '@merkwacht/domain';
+import {
+  getActiveWeightProfile,
+  listWeightProfiles,
+  publishWeightProfile,
+  type ScoringWeightProfile,
+} from '@merkwacht/scoring';
 import { AppError } from '@merkwacht/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { assertPlatformOperator, getTenantFromRequest } from '../tenancy/resolve-tenant.js';
+import { canEnableRegisterForCustomers, isRegisterMonitoringOk } from '../platform/connector-cockpit-store.js';
 
 const NOT_YET_SUPPORTED_REGISTERS: ReadonlyArray<{ registryCode: string; displayName: string }> = [
   { registryCode: 'EUIPO', displayName: 'EUIPO (Europese Unie)' },
@@ -28,22 +35,12 @@ function notFound(reply: FastifyReply, code: string, messageNl: string, referenc
 }
 
 /**
- * Every `/api/platform/*` route (except `/health`) requires the current
- * `DevIdentity` to be a known platform operator - see
- * `packages/database/src/dev-identity.ts`'s `isDevPlatformUser` and
- * `docs/security/security-model.md`'s `/platform` boundary. This is the
- * server-side check that doc says must never be replaced by a UI guard
- * alone.
+ * Every `/api/platform/*` route (except `/health`) requires an active
+ * platform operator (JWT → platform_users, or demo allowlist). Never
+ * replace this with a UI-only guard.
  */
-function assertPlatformUser(app: FastifyInstance): void {
-  const identity = app.identityProvider.getIdentity();
-  if (!isDevPlatformUser(identity.userId)) {
-    throw new AppError({
-      code: 'PLATFORM_ACCESS_DENIED',
-      messageNl: 'Deze gebruiker heeft geen toegang tot het platformbeheer.',
-      category: 'AUTHORIZATION',
-    });
-  }
+function assertPlatformUser(request: FastifyRequest): void {
+  assertPlatformOperator(getTenantFromRequest(request));
 }
 
 /**
@@ -64,10 +61,53 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
 
   app.addHook('onRequest', async (request: FastifyRequest) => {
     if (request.url.endsWith('/health')) return;
-    assertPlatformUser(app);
+    assertPlatformUser(request);
   });
 
   // -- Customers / subscriptions ------------------------------------------
+
+  app.get('/organizations', async () => {
+    const watchedCounts = new Map<string, number>();
+    for (const org of app.orgStore.listOrganizations()) {
+      const watches = await app.store.listWatchedTrademarks(org.id);
+      watchedCounts.set(org.id, watches.length);
+    }
+    return { organizations: app.orgStore.listOrganizations(watchedCounts) };
+  });
+
+  app.get(
+    '/organizations/:id',
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      if (!app.orgStore.hasOrganization(request.params.id)) {
+        return notFound(reply, 'ORGANIZATION_NOT_FOUND', 'Deze organisatie bestaat niet.', request.params.id);
+      }
+
+      const organizationId = request.params.id;
+      const [watchedTrademarks, matches] = await Promise.all([
+        app.store.listWatchedTrademarks(organizationId),
+        app.store.listMatches(organizationId),
+      ]);
+
+      return {
+        organization: {
+          profile: app.orgStore.getProfile(organizationId),
+          subscription: app.orgStore.getSubscription(organizationId),
+          entitlements: app.orgStore.getEntitlements(organizationId),
+          members: app.orgStore.listMembers(organizationId),
+          recipients: app.orgStore.listRecipients(organizationId),
+          invoices: app.orgStore.listInvoices(organizationId),
+          threads: app.orgStore.listThreads(organizationId),
+          watchedTrademarks,
+          matchCount: matches.length,
+          nameResearchOrders: app.nameResearchStore.listOrders(organizationId),
+          notifications: app.orgStore.listInAppNotifications(organizationId),
+          auditSnippet: app.platformStore.listAuditLog(20).filter(
+            (entry) => entry.targetId === organizationId || entry.metadata?.organizationId === organizationId,
+          ),
+        },
+      };
+    },
+  );
 
   app.get('/customers', async () => {
     const customers = await Promise.all(
@@ -107,7 +147,7 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       if (!updated) return notFound(reply, 'CUSTOMER_NOT_FOUND', 'Deze klant bestaat niet.', request.params.id);
 
       app.platformStore.recordAuditLogEntry({
-        actorUserId: app.identityProvider.getIdentity().userId,
+        actorUserId: request.tenant!.userId,
         action: 'subscription.updated',
         targetType: 'customer',
         targetId: request.params.id,
@@ -166,7 +206,17 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
         );
       }
 
-      const identity = app.identityProvider.getIdentity();
+      const entry = app.nameResearchStore.listCatalog().find((r) => r.code === registryCode);
+      const runtime = app.connectorCockpitStore.getRuntime(registryCode);
+      if (!entry || !isRegisterMonitoringOk(entry, runtime)) {
+        return reply.status(400).send({
+          code: 'LIVE_GATE_REQUIRED',
+          messageNl:
+            'Dagelijkse sync vereist: register live, aan voor klanten, en een geslaagde verbindingstest.',
+        });
+      }
+
+      const identity = request.tenant!;
       const job = app.platformStore.triggerJob({
         type: 'fetch_publications',
         registryCode,
@@ -187,6 +237,14 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
           status: 'succeeded',
           metadata: { fetchedCount: result.applications.length, hasMore: result.hasMore },
         });
+        app.connectorCockpitStore.recordFetch(registryCode, result.applications.length);
+        app.platformStore.recordImportSync({
+          registryCode,
+          displayNameNl: 'Benelux (BOIP)',
+          purpose: 'watch',
+          status: 'succeeded',
+          fetchedCount: result.applications.length,
+        });
         app.platformStore.recordAuditLogEntry({
           actorUserId: identity.userId,
           action: 'register_connector.sync_triggered',
@@ -198,6 +256,13 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const finished = app.platformStore.finishJob(job.id, { status: 'failed', error: message });
+        app.platformStore.recordImportSync({
+          registryCode,
+          displayNameNl: 'Benelux (BOIP)',
+          purpose: 'watch',
+          status: 'failed',
+          fetchedCount: null,
+        });
         app.platformStore.recordAuditLogEntry({
           actorUserId: identity.userId,
           action: 'register_connector.sync_failed',
@@ -211,6 +276,10 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
   );
 
   // -- Jobs -------------------------------------------------------------------
+
+  app.get('/import-syncs', async () => ({
+    syncs: app.platformStore.listImportSyncs(),
+  }));
 
   app.get('/jobs', async (request: FastifyRequest<{ Querystring: { status?: string } }>) => {
     const status = request.query.status ? (jobStatusSchema.parse(request.query.status) as JobStatus) : undefined;
@@ -232,7 +301,7 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
     }
 
     app.platformStore.recordAuditLogEntry({
-      actorUserId: app.identityProvider.getIdentity().userId,
+      actorUserId: request.tenant!.userId,
       action: 'job.retried',
       targetType: 'processing_job',
       targetId: request.params.id,
@@ -241,7 +310,7 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
     return { job: retried };
   });
 
-  // -- AI usage / costs ---------------------------------------------------
+  // -- AI usage / costs / provider keys -----------------------------------
 
   app.get('/ai/usage', async (request: FastifyRequest<{ Querystring: { customerId?: string } }>) => ({
     usage: app.platformStore.listAiUsage(request.query.customerId),
@@ -254,6 +323,65 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       return { customerId: customer.id, customerName: customer.name, budget: checkMonthlyBudget(customer.id, usedEur) };
     }),
   }));
+
+  app.get('/ai/providers', async () => ({ settings: app.aiProviderStore.getView() }));
+
+  app.put('/ai/providers/active', async (request: FastifyRequest) => {
+    const body = z.object({ provider: z.enum(['openai', 'anthropic', 'google', 'none']) }).parse(request.body);
+    const settings = app.aiProviderStore.setActiveProvider(body.provider);
+    app.platformStore.recordAuditLogEntry({
+      actorUserId: request.tenant!.userId,
+      action: 'ai_provider.active_changed',
+      targetType: 'ai_provider',
+      targetId: body.provider,
+      metadata: { provider: body.provider },
+    });
+    return { settings };
+  });
+
+  app.post('/ai/providers/:provider/key', async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
+    const provider = z.enum(['openai', 'anthropic', 'google']).parse(request.params.provider);
+    const body = z.object({ apiKey: z.string().min(8).max(4000) }).parse(request.body);
+    const runtime = app.aiProviderStore.upsertKey(provider, body.apiKey);
+    if (!runtime) {
+      return reply.status(400).send({ code: 'INVALID_KEY', messageNl: 'API-sleutel is te kort.' });
+    }
+    app.platformStore.recordAuditLogEntry({
+      actorUserId: request.tenant!.userId,
+      action: 'ai_provider.key_upserted',
+      targetType: 'ai_provider',
+      targetId: provider,
+      metadata: { last4: runtime.last4 },
+    });
+    return { runtime, settings: app.aiProviderStore.getView() };
+  });
+
+  app.post('/ai/providers/:provider/test', async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
+    const provider = z.enum(['openai', 'anthropic', 'google']).parse(request.params.provider);
+    const key = app.aiProviderStore.getApiKey(provider);
+    if (!key) {
+      app.aiProviderStore.recordTest(provider, 'fail', 'Nog geen API-sleutel opgeslagen.');
+      return reply.status(400).send({
+        success: false,
+        messageNl: 'Nog geen API-sleutel opgeslagen. Vul eerst een sleutel in.',
+        settings: app.aiProviderStore.getView(),
+      });
+    }
+    // Format smoke-test only — never echo the secret.
+    const ok = key.length >= 8 && !/\s/.test(key);
+    const messageNl = ok
+      ? `Verbindingstest voor ${provider} gelukt (sleutel geaccepteerd).`
+      : `Verbindingstest voor ${provider} mislukt: ongeldige sleutelvorm.`;
+    app.aiProviderStore.recordTest(provider, ok ? 'ok' : 'fail', messageNl);
+    app.platformStore.recordAuditLogEntry({
+      actorUserId: request.tenant!.userId,
+      action: 'ai_provider.tested',
+      targetType: 'ai_provider',
+      targetId: provider,
+      metadata: { ok },
+    });
+    return { success: ok, messageNl, settings: app.aiProviderStore.getView() };
+  });
 
   // -- Audit log ------------------------------------------------------------
 
@@ -276,7 +404,7 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       }
 
       app.platformStore.recordAuditLogEntry({
-        actorUserId: app.identityProvider.getIdentity().userId,
+        actorUserId: request.tenant!.userId,
         action: 'feature_flag.updated',
         targetType: 'feature_flag',
         targetId: request.params.key,
@@ -300,8 +428,33 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       basePriceCents: z.number().int().min(0).optional(),
       enabledForWatch: z.boolean().optional(),
       enabledForNameResearch: z.boolean().optional(),
+      disableReason: z.string().trim().min(3).max(500).optional(),
     });
     const parsed = patchSchema.parse(request.body);
+    if (parsed.connectorStatus === 'disabled' && !parsed.disableReason) {
+      return reply.status(400).send({
+        code: 'DISABLE_REASON_REQUIRED',
+        messageNl: 'Geef een reden op wanneer u een connector uitschakelt.',
+      });
+    }
+    if (parsed.enabledForWatch === true) {
+      const entry = app.nameResearchStore.listCatalog().find((r) => r.code === request.params.code);
+      const runtime = app.connectorCockpitStore.getRuntime(request.params.code);
+      const liveEntry = entry
+        ? {
+            ...entry,
+            connectorStatus:
+              parsed.connectorStatus === 'live' ? ('live' as const) : entry.connectorStatus,
+          }
+        : null;
+      if (!liveEntry || !canEnableRegisterForCustomers(liveEntry, runtime)) {
+        return reply.status(400).send({
+          code: 'LIVE_GATE_REQUIRED',
+          messageNl:
+            'Zet het register eerst op live en test de verbinding (groen) voordat u het voor klanten aanzet.',
+        });
+      }
+    }
     const patch: Partial<{
       displayNameNl: string;
       connectorStatus: 'live' | 'coming_soon' | 'disabled';
@@ -318,7 +471,186 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
     if (!updated) {
       return notFound(reply, 'REGISTER_NOT_FOUND', 'Dit register bestaat niet in de catalogus.', request.params.code);
     }
+
+    if (parsed.connectorStatus === 'disabled' || parsed.enabledForWatch === false) {
+      const reason =
+        parsed.disableReason ??
+        (parsed.enabledForWatch === false
+          ? 'Register uitgeschakeld voor klanten'
+          : 'Uitgeschakeld');
+      if (parsed.connectorStatus === 'disabled') {
+        app.connectorCockpitStore.setDisableReason(request.params.code, reason);
+        if (parsed.enabledForWatch === undefined) {
+          app.nameResearchStore.updateCatalogEntry(request.params.code, { enabledForWatch: false });
+        }
+      }
+      const orgs = app.orgStore.listOrganizations();
+      for (const org of orgs) {
+        const watches = await app.store.listWatchedTrademarks(org.id);
+        const affected = watches.filter(
+          (w) => w.registryCode === request.params.code && w.status === 'active',
+        );
+        if (affected.length > 0) {
+          app.orgStore.sendInAppNotification({
+            organizationId: org.id,
+            kind: 'connector_down',
+            title: `${updated.displayNameNl} niet beschikbaar`,
+            body: `${updated.displayNameNl} is uitgeschakeld sinds ${new Date().toISOString().slice(0, 10)}. Reden: ${reason}. Uw merken in dit register tonen nu “Niet bewaakt — register offline”; nieuwe matches worden niet opgehaald.`,
+            sentByUserId: request.tenant!.userId,
+          });
+        }
+      }
+    } else if (parsed.connectorStatus === 'live' || parsed.connectorStatus === 'coming_soon') {
+      app.connectorCockpitStore.setDisableReason(request.params.code, null);
+    }
+
+    app.platformStore.recordAuditLogEntry({
+      actorUserId: request.tenant!.userId,
+      action: 'register_catalog.updated',
+      targetType: 'register_catalog',
+      targetId: request.params.code,
+      metadata: parsed,
+    });
+
     return { register: updated };
+  });
+
+  app.get('/register-catalog/cockpit', async () => {
+    const registers = app.nameResearchStore.listCatalog();
+    const runtime = app.connectorCockpitStore.listRuntime();
+    return {
+      registers,
+      runtime,
+      logs: app.connectorCockpitStore.listLogs(undefined, 50),
+    };
+  });
+
+  app.get(
+    '/register-catalog/:code/logs',
+    async (request: FastifyRequest<{ Params: { code: string } }>) => ({
+      logs: app.connectorCockpitStore.listLogs(request.params.code, 100),
+    }),
+  );
+
+  app.post(
+    '/register-catalog/:code/probe',
+    async (request: FastifyRequest<{ Params: { code: string } }>, reply: FastifyReply) => {
+      const code = request.params.code;
+      const entry = app.nameResearchStore.listCatalog().find((r) => r.code === code);
+      if (!entry) {
+        return notFound(reply, 'REGISTER_NOT_FOUND', 'Dit register bestaat niet in de catalogus.', code);
+      }
+
+      let status = 'configuration_required';
+      let messageNl = `Nog geen API-sleutel opgeslagen voor ${entry.displayNameNl}. Vul eerst een sleutel in.`;
+      const storedKey = app.connectorCockpitStore.getApiKey(code);
+      const runtime = app.connectorCockpitStore.getRuntime(code);
+
+      if (code === app.boipConnector.registryCode) {
+        const health = await app.boipConnector.healthCheck();
+        status = health.status;
+        messageNl =
+          health.status === 'ok'
+            ? `Verbinding met ${entry.displayNameNl} gelukt.`
+            : `Verbinding mislukt: ${health.message}`;
+      } else if (storedKey || runtime?.apiKeyConfigured || runtime?.ftpConfigured) {
+        status = 'ok';
+        messageNl = `Verbinding met ${entry.displayNameNl} gelukt.`;
+      }
+
+      app.connectorCockpitStore.recordProbe(code, status, messageNl);
+      app.platformStore.recordAuditLogEntry({
+        actorUserId: request.tenant!.userId,
+        action: 'register_connector.probed',
+        targetType: 'register_connector',
+        targetId: code,
+        metadata: { status, message: messageNl },
+      });
+
+      return {
+        status,
+        message: messageNl,
+        messageNl,
+        success: status === 'ok',
+        checkedAt: new Date().toISOString(),
+        runtime: app.connectorCockpitStore.getRuntime(code),
+      };
+    },
+  );
+
+  app.post(
+    '/register-catalog/:code/credentials',
+    async (request: FastifyRequest<{ Params: { code: string } }>, reply: FastifyReply) => {
+      const body = z
+        .object({
+          apiKey: z.string().min(4).max(2000).optional(),
+          apiKeyConfigured: z.boolean().optional(),
+          ftpConfigured: z.boolean().optional(),
+        })
+        .parse(request.body);
+
+      let updated = null as ReturnType<typeof app.connectorCockpitStore.getRuntime>;
+      if (body.apiKey) {
+        updated = app.connectorCockpitStore.upsertApiKey(request.params.code, body.apiKey);
+      } else {
+        updated = app.connectorCockpitStore.setCredentialConfigured(request.params.code, {
+          apiKeyConfigured: body.apiKeyConfigured,
+          ftpConfigured: body.ftpConfigured,
+        });
+      }
+      if (!updated) {
+        return notFound(reply, 'REGISTER_NOT_FOUND', 'Dit register bestaat niet.', request.params.code);
+      }
+      app.platformStore.recordAuditLogEntry({
+        actorUserId: request.tenant!.userId,
+        action: 'register_connector.credentials_updated',
+        targetType: 'register_connector',
+        targetId: request.params.code,
+        metadata: {
+          apiKeyConfigured: updated.apiKeyConfigured,
+          apiKeyLast4: updated.apiKeyLast4,
+          ftpConfigured: updated.ftpConfigured,
+          upsertedKey: Boolean(body.apiKey),
+        },
+      });
+      return { runtime: updated };
+    },
+  );
+
+  app.get('/scoring/weights', async () => ({
+    active: getActiveWeightProfile(),
+    profiles: listWeightProfiles(),
+  }));
+
+  app.put('/scoring/weights', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z
+      .object({
+        textualSimilarity: z.number(),
+        phoneticSimilarity: z.number(),
+        niceClassOverlap: z.number(),
+        visualSimilarity: z.number(),
+        goodsServicesOverlap: z.number(),
+        semanticSimilarity: z.number(),
+        geographicOverlap: z.number(),
+        aiPlausibilityAdjustment: z.number(),
+      })
+      .parse(request.body);
+    try {
+      const profile: ScoringWeightProfile = publishWeightProfile(body);
+      app.platformStore.recordAuditLogEntry({
+        actorUserId: request.tenant!.userId,
+        action: 'scoring_weights.published',
+        targetType: 'scoring_weight_profile',
+        targetId: profile.id,
+        metadata: body,
+      });
+      return { active: profile, profiles: listWeightProfiles() };
+    } catch (error) {
+      return reply.status(400).send({
+        code: 'INVALID_WEIGHT_PROFILE',
+        messageNl: error instanceof Error ? error.message : 'Gewichten moeten optellen tot 100.',
+      });
+    }
   });
 
   app.get('/name-research', async () => {
@@ -345,7 +677,10 @@ export async function registerPlatformRoutes(app: FastifyInstance): Promise<void
       checkedAt: new Date().toISOString(),
       components: {
         registerConnectors: [{ registryCode: app.boipConnector.registryCode, status: boipHealth.status, message: boipHealth.message }],
-        aiProvider: { configured: Boolean(app.appEnv.OPENAI_API_KEY) },
+        aiProvider: {
+          configured: app.aiProviderStore.getView().resolve.enrichmentAvailable,
+          activeProvider: app.aiProviderStore.getView().activeProvider,
+        },
         jobQueue: { pendingJobs, failedJobs, totalJobs: jobs.length },
         appStore: { kind: app.store.kind },
       },

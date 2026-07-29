@@ -157,15 +157,14 @@ export async function buildDemoSeed(organizationId: string): Promise<DemoSeed> {
     LUMERO: 'under_review',
     BRENTIQ: 'dismissed',
     VELORA: 'new',
-    KASTORIN: 'opposition_deadline_passed',
+    NOVAFORM: 'opposition_deadline_passed',
   };
 
   const matches = await Promise.all(
     BOIP_FIXTURE_PUBLICATIONS.map(async (publication) => {
       let candidate = toCandidateApplication(mapBoipPublicationToCandidateApplicationInput(publication));
       const status = matchStatusByMarkText[publication.markText] ?? 'new';
-      // KASTORIN fixture is deliberately past its opposition window and only
-      // appears in the archive as an expired-deadline example.
+      // Past opposition window — archive example ("niet meer aan te vechten").
       if (status === 'opposition_deadline_passed' && candidate.oppositionDeadline) {
         candidate = {
           ...candidate,

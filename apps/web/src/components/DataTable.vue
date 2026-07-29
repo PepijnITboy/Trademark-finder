@@ -6,7 +6,7 @@ export interface DataTableColumn<T> {
   readonly width?: string;
 }
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     columns: readonly DataTableColumn<T>[];
     rows: readonly T[];
@@ -17,6 +17,7 @@ withDefaults(
     clickableRows?: boolean;
     /** Omit outer card chrome when nested in MwCard. */
     embedded?: boolean;
+    rowClass?: (row: T) => string;
   }>(),
   {
     loading: false,
@@ -24,10 +25,14 @@ withDefaults(
     emptyDescription: 'Er is niets om te tonen.',
     clickableRows: false,
     embedded: false,
+    rowClass: undefined,
   },
 );
 
-defineEmits<{ (e: 'row-click', row: T): void }>();
+const emit = defineEmits<{
+  (e: 'row-click', row: T): void;
+  (e: 'header-click', columnKey: string): void;
+}>();
 
 const skeletonRows = [0, 1, 2, 3, 4];
 
@@ -50,8 +55,13 @@ function fallbackCellValue(row: T, key: string): string {
             :key="column.key"
             scope="col"
             class="px-5 py-3.5 text-xs font-medium uppercase tracking-wide text-text-muted"
-            :class="{ 'text-right': column.align === 'right', 'text-center': column.align === 'center' }"
+            :class="{
+              'text-right': column.align === 'right',
+              'text-center': column.align === 'center',
+              'cursor-pointer select-none hover:text-text': true,
+            }"
             :style="column.width ? { width: column.width } : undefined"
+            @click="emit('header-click', column.key)"
           >
             {{ column.label }}
           </th>
@@ -78,10 +88,10 @@ function fallbackCellValue(row: T, key: string): string {
             v-for="row in rows"
             :key="rowKey(row)"
             class="border-b border-border transition-colors last:border-b-0 hover:bg-surface-muted/50"
-            :class="{ 'cursor-pointer': clickableRows }"
+            :class="[clickableRows ? 'cursor-pointer' : '', props.rowClass?.(row) ?? '']"
             tabindex="0"
-            @click="$emit('row-click', row)"
-            @keydown.enter="$emit('row-click', row)"
+            @click="emit('row-click', row)"
+            @keydown.enter="emit('row-click', row)"
           >
             <td
               v-for="column in columns"

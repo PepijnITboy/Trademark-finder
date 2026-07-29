@@ -4,7 +4,7 @@ import DataTable, { type DataTableColumn } from '../../components/DataTable.vue'
 import MwButton from '../../components/MwButton.vue';
 import MwCard from '../../components/MwCard.vue';
 import MwField from '../../components/MwField.vue';
-import SkeletonBlock from '../../components/SkeletonBlock.vue';
+import StatusBadge from '../../components/StatusBadge.vue';
 import { usePlatformPlans, useUpdatePlatformPlan } from '../../api/platform-org';
 import type { PlanCatalogRecord, SubscriptionPlan } from '../../api/types';
 import PlatformPageHeader from './PlatformPageHeader.vue';
@@ -20,6 +20,7 @@ const editForm = reactive({
   priceMonthlyCents: 0,
   maxWatchedTrademarks: 0,
   maxNotificationEmails: 0,
+  isActive: true,
 });
 
 const columns: readonly DataTableColumn<PlanCatalogRecord>[] = [
@@ -28,7 +29,8 @@ const columns: readonly DataTableColumn<PlanCatalogRecord>[] = [
   { key: 'priceMonthlyCents', label: 'Prijs/mnd', width: '9rem', align: 'right' },
   { key: 'maxWatchedTrademarks', label: 'Max merken', width: '8rem', align: 'right' },
   { key: 'maxNotificationEmails', label: 'Max e-mails', width: '9rem', align: 'right' },
-  { key: 'actions', label: '', width: '8rem', align: 'right' },
+  { key: 'isActive', label: 'Status', width: '8rem' },
+  { key: 'actions', label: '', width: '12rem', align: 'right' },
 ];
 
 function formatPrice(cents: number): string {
@@ -41,6 +43,7 @@ function startEdit(plan: PlanCatalogRecord): void {
   editForm.priceMonthlyCents = plan.priceMonthlyCents;
   editForm.maxWatchedTrademarks = plan.maxWatchedTrademarks;
   editForm.maxNotificationEmails = plan.maxNotificationEmails;
+  editForm.isActive = plan.isActive;
 }
 
 function saveEdit(): void {
@@ -53,6 +56,7 @@ function saveEdit(): void {
         priceMonthlyCents: editForm.priceMonthlyCents,
         maxWatchedTrademarks: editForm.maxWatchedTrademarks,
         maxNotificationEmails: editForm.maxNotificationEmails,
+        isActive: editForm.isActive,
       },
     },
     {
@@ -64,12 +68,22 @@ function saveEdit(): void {
     },
   );
 }
+
+function toggleActive(plan: PlanCatalogRecord): void {
+  updatePlan.mutate(
+    { code: plan.code, patch: { isActive: !plan.isActive } },
+    {
+      onSuccess: () => toast.success(plan.isActive ? 'Plan uitgezet' : 'Plan geactiveerd'),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Opslaan mislukt'),
+    },
+  );
+}
 </script>
 
 <template>
   <PlatformPageHeader
     title="Abonnementen"
-    description="Beheer van abonnementsplannen, limieten en prijzen in de catalogus."
+    description="Catalogus van abonnementsplannen. Uitgezette plannen zijn niet kiesbaar voor nieuwe of gewijzigde abonnementen."
   >
     <MwCard :padding="false">
       <DataTable
@@ -82,9 +96,15 @@ function saveEdit(): void {
         empty-description="De abonnementencatalogus kon niet worden geladen."
       >
         <template #cell-priceMonthlyCents="{ row }">{{ formatPrice(row.priceMonthlyCents) }}</template>
+        <template #cell-isActive="{ row }">
+          <StatusBadge :label="row.isActive ? 'Actief' : 'Uitgezet'" :tone="row.isActive ? 'success' : 'neutral'" />
+        </template>
         <template #cell-actions="{ row }">
-          <div class="flex justify-end">
+          <div class="flex justify-end gap-1">
             <MwButton variant="tertiary" size="sm" @click="startEdit(row)">Bewerken</MwButton>
+            <MwButton variant="tertiary" size="sm" @click="toggleActive(row)">
+              {{ row.isActive ? 'Uitzetten' : 'Activeren' }}
+            </MwButton>
           </div>
         </template>
       </DataTable>

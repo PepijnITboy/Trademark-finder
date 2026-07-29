@@ -22,7 +22,12 @@ const TEST_ENV: ApiEnv = {
   SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
   INTERNAL_JOB_SECRET: 'a-test-internal-job-secret-value',
   CORS_ORIGIN: 'http://localhost:5173',
+  ALLOW_DEMO_STORE: true,
+  DEV_DEMO_AUTH: true,
   BOIP_USE_FIXTURES: true,
+  EUIPO_USE_FIXTURES: false,
+  USPTO_USE_FIXTURES: false,
+  WIPO_USE_FIXTURES: false,
 };
 
 describe('buildApp', () => {
@@ -81,6 +86,44 @@ describe('buildApp', () => {
     const plansResponse = await app.inject({ method: 'GET', url: '/api/v1/subscription/plans' });
     expect(plansResponse.statusCode).toBe(200);
     expect(plansResponse.json().plans.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('requests and undoes cancel-at-period-end via the subscription API', async () => {
+    const cancelResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/subscription/cancel-at-period-end',
+    });
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(cancelResponse.json().subscription.cancelAtPeriodEnd).toBe(true);
+    expect(cancelResponse.json().subscription.nextInvoiceAt).toBeNull();
+
+    const undoResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/subscription/undo-cancel-at-period-end',
+    });
+    expect(undoResponse.statusCode).toBe(200);
+    expect(undoResponse.json().subscription.cancelAtPeriodEnd).toBe(false);
+    expect(undoResponse.json().subscription.nextInvoiceAt).toBeTruthy();
+  });
+
+  it('returns invoices with an NL BTW breakdown and downloadable PDF/UBL', async () => {
+    const listResponse = await app.inject({ method: 'GET', url: '/api/v1/invoices' });
+    expect(listResponse.statusCode).toBe(200);
+    const invoice = listResponse.json().invoices[0];
+    expect(invoice).toHaveProperty('exVatCents');
+    expect(invoice).toHaveProperty('btwCents');
+    expect(invoice.exVatCents + invoice.btwCents).toBe(invoice.amountCents);
+    expect(invoice.currency).toBe('EUR');
+
+    const pdfResponse = await app.inject({ method: 'GET', url: `/api/v1/invoices/${invoice.id}/pdf` });
+    expect(pdfResponse.statusCode).toBe(200);
+    expect(pdfResponse.headers['content-type']).toContain('application/pdf');
+    expect(pdfResponse.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+
+    const ublResponse = await app.inject({ method: 'GET', url: `/api/v1/invoices/${invoice.id}/ubl` });
+    expect(ublResponse.statusCode).toBe(200);
+    expect(ublResponse.headers['content-type']).toContain('xml');
+    expect(ublResponse.body).toContain('<cbc:Percent>21</cbc:Percent>');
   });
 
   it('blocks chat thread creation on starter plan with 403', async () => {
@@ -319,7 +362,11 @@ describe('buildApp', () => {
     const patched = await app.inject({
       method: 'PATCH',
       url: '/api/platform/register-catalog/EUIPO',
-      payload: { enabledForNameResearch: false, connectorStatus: 'disabled' },
+      payload: {
+        enabledForNameResearch: false,
+        connectorStatus: 'disabled',
+        disableReason: 'Test: tijdelijk uit voor name-research scope',
+      },
     });
     expect(patched.statusCode).toBe(200);
 

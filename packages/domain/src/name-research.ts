@@ -6,6 +6,8 @@ import type { RegisterCatalogEntry } from './register-catalog.js';
 
 export const NAME_RESEARCH_MIN_THRESHOLD = 20;
 export const NAME_RESEARCH_MAX_THRESHOLD = 100;
+/** Default display filter when wizard no longer exposes a threshold step. */
+export const NAME_RESEARCH_DEFAULT_THRESHOLD = 40;
 /** Below this threshold the UI warns that the report may become very large. */
 export const NAME_RESEARCH_LARGE_REPORT_WARN_BELOW = 40;
 
@@ -144,6 +146,9 @@ export function quoteNameResearch(input: NameResearchQuoteInput): NameResearchQu
   for (const scope of input.scopes) {
     const entry = input.catalog.find((r) => r.code === scope.registryCode);
     if (!entry || !entry.enabledForNameResearch || entry.connectorStatus === 'disabled') {
+      throw new Error(`Register ${scope.registryCode} is niet beschikbaar voor merkonderzoek.`);
+    }
+    if (entry.connectorStatus !== 'live' && entry.connectorStatus !== 'coming_soon') {
       throw new Error(`Register ${scope.registryCode} is niet beschikbaar voor merkonderzoek.`);
     }
     lineItems.push({

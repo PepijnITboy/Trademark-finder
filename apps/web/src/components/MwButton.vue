@@ -22,7 +22,7 @@ withDefaults(
 <template>
   <button
     :type="type"
-    class="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
+    class="mw-btn-press inline-flex items-center justify-center gap-2 rounded-md font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
     :class="[
       size === 'sm' ? 'px-3 py-1.5 text-sm' : 'px-3.5 py-2 text-sm',
       block && 'w-full',

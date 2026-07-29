@@ -119,7 +119,7 @@ function openAdvisor(): void {
             <div>
               <dt class="text-xs text-text-muted">Betaling</dt>
               <dd class="font-medium">
-                {{ order.creditUsed ? '1 credit' : formatEuroCents(order.priceCents) }}
+                {{ formatEuroCents(order.priceCents) }}
               </dd>
             </div>
             <div v-if="order.intendedNicheNl" class="sm:col-span-2">

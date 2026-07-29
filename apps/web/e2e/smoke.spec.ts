@@ -130,24 +130,23 @@ test.describe('customer app (/app)', () => {
     await expect(page.getByRole('button', { name: 'Nieuwe aanvraag' })).toHaveCount(0);
   });
 
-  test('merkonderzoek scopes + drempel waarschuwing + hit-detail', async ({ page }) => {
+  test('merkonderzoek scopes + toelichting + hit-detail', async ({ page }) => {
     await page.goto('/app/merkonderzoek/nieuw');
     await page.getByPlaceholder('Bijv. NOVAFORM').fill('WILLEM P');
-    await page.getByPlaceholder(/SaaS voor retailers/i).fill('Software en SaaS');
     await page.getByRole('button', { name: 'Volgende' }).click();
 
     await expect(page.getByPlaceholder(/Benelux, EUIPO/i)).toBeVisible();
     await expect(page.getByText('Benelux (BOIP)')).toBeVisible();
     await expect(page.getByText(/Nice-klassen voor BOIP/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Alle klassen' })).toBeVisible();
     await page.getByRole('button', { name: 'Volgende' }).click();
 
-    await page.locator('input[type="number"]').fill('25');
-    await page.locator('input[type="number"]').blur();
-    await expect(page.getByText(/Groot rapport/i)).toBeVisible();
-    await expect(page.getByText(/geen invloed op de prijs/i)).toBeVisible();
+    await expect(page.getByText('Toelichting (optioneel)')).toBeVisible();
+    await page.getByPlaceholder(/SaaS voor retailers/i).fill('Software en SaaS');
+    await expect(page.getByText(/Groot rapport/i)).toHaveCount(0);
     await page.getByRole('button', { name: 'Volgende' }).click();
 
-    await page.getByRole('button', { name: /Start met credit|Betalen en starten/ }).click();
+    await page.getByRole('button', { name: /Betalen en starten/ }).click();
     await expect(page).toHaveURL(/\/app\/merkonderzoek\/(?!nieuw)[^/?]+/);
     await expect(page.getByRole('heading', { level: 1, name: /Rapport:/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Merk aanvragen via bureau' })).toBeVisible();
@@ -161,32 +160,50 @@ test.describe('customer app (/app)', () => {
     await expect(page.getByText(/Willempe Holding/i).first()).toBeVisible();
     await expect(page.getByText(/Componentscores/i)).toBeVisible();
   });
+
+  test('/app/organisatie meldingen tab shows trigger column', async ({ page }) => {
+    await page.goto('/app/organisatie?tab=meldingen');
+    await expect(page.getByRole('heading', { name: 'Meldingsadressen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Adres toevoegen' })).toBeVisible();
+  });
 });
 
 test.describe('platform app (/platform)', () => {
-  test('/platform/overzicht and chat nav', async ({ page }) => {
+  test('/platform/overzicht and IA nav', async ({ page }) => {
     await page.goto('/platform/overzicht');
     await expect(page.getByText('Platformbeheer').first()).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Platformoverzicht' })).toBeVisible();
     const nav = page.getByRole('navigation', { name: 'Hoofdnavigatie' });
     const operatie = nav.getByRole('button', { name: 'Operatie' });
     if ((await operatie.getAttribute('aria-expanded')) === 'false') await operatie.click();
-    await expect(nav.getByRole('link', { name: 'Merkrechtenchat' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Notificaties' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Merkrechtenchat' })).toHaveCount(0);
+    const systeem = nav.getByRole('button', { name: 'Systeem' });
+    if ((await systeem.getAttribute('aria-expanded')) === 'false') await systeem.click();
+    await expect(nav.getByRole('link', { name: 'Abonnementen' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Prijzen' })).toBeVisible();
   });
 
-  test('/platform/abonnementen and /platform/registers', async ({ page }) => {
+  test('/platform/abonnementen, prijzen and registers', async ({ page }) => {
     await page.goto('/platform/abonnementen');
     await expect(page.getByRole('heading', { level: 1, name: /Abonnement/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Uitzetten' }).first()).toBeVisible();
+    await page.goto('/platform/prijzen');
+    await expect(page.getByRole('heading', { level: 1, name: 'Prijzen' })).toBeVisible();
     await page.goto('/platform/registers');
     await expect(page.getByRole('heading', { level: 1, name: 'Registers en koppelingen' })).toBeVisible();
-    await expect(page.getByText('Registercatalogus (platform)')).toBeVisible();
-    await expect(page.getByText(/geen drempeltoeslag/i)).toBeVisible();
-    await page.goto('/platform/merkonderzoek');
-    await expect(page.getByRole('heading', { level: 1, name: 'Merkonderzoek' })).toBeVisible();
-    await expect(page.getByText(/registerbasisprijzen/i)).toBeVisible();
+    await expect(page.getByText('Runtime-koppelingen')).toBeVisible();
+    await expect(page.getByText(/−€5|\+€5/)).toHaveCount(0);
   });
 
-  test('/platform/klanten shows merkonderzoek scopes after order', async ({ page }) => {
+  test('klanten list shows ≥2 orgs (OrgAlpha + OrgBeta)', async ({ page }) => {
+    await page.goto('/platform/klanten');
+    await expect(page.getByRole('heading', { level: 1, name: 'Klanten' })).toBeVisible();
+    await expect(page.getByText('Lumaro B.V.')).toBeVisible();
+    await expect(page.getByText('Fictieve Retail Groep B.V.')).toBeVisible();
+  });
+
+  test('klanten list → detail shows sections after research order', async ({ page }) => {
     await page.request.post('http://localhost:3001/api/v1/name-research/orders', {
       data: {
         markText: 'PLATFORMTEST',
@@ -196,22 +213,23 @@ test.describe('platform app (/platform)', () => {
         useCredit: false,
       },
     });
-    await page.goto('/platform/merkonderzoek');
+    await page.goto('/platform/klanten');
+    await expect(page.getByText('Lumaro B.V.')).toBeVisible();
+    await expect(page.getByText('Fictieve Retail Groep B.V.')).toBeVisible();
+    await page.getByText('Lumaro B.V.').click();
+    await expect(page).toHaveURL(/\/platform\/klanten\/[^/]+/);
+    await expect(page.getByRole('tab', { name: 'Facturen' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Merkonderzoek' }).click();
     await expect(page.getByText('PLATFORMTEST').first()).toBeVisible();
     await expect(page.getByText(/BOIP \(9, 42\)/).first()).toBeVisible();
-    await page.goto('/platform/klanten');
-    await expect(page.getByRole('heading', { level: 1, name: 'Klanten' })).toBeVisible();
-    await expect(page.getByText('Merkonderzoek (deze klant)')).toBeVisible();
-    await expect(page.getByText('PLATFORMTEST').first()).toBeVisible();
   });
 
-  test('/platform/klanten, accounts and betalingen show customer sync', async ({ page }) => {
-    await page.goto('/platform/klanten');
-    await expect(page.getByRole('heading', { level: 1, name: 'Klanten' })).toBeVisible();
-    await expect(page.getByText(/Organisatieprofiel|Contact-e-mail|Facturatie-e-mail/i).first()).toBeVisible();
-    await page.goto('/platform/accounts');
-    await expect(page.getByRole('heading', { level: 1, name: 'Accounts' })).toBeVisible();
-    await page.goto('/platform/betalingen');
-    await expect(page.getByRole('heading', { level: 1, name: /Betaling/i })).toBeVisible();
+  test('/platform/imports and notificaties', async ({ page }) => {
+    await page.goto('/platform/imports');
+    await expect(page.getByRole('heading', { level: 1, name: /Imports/i })).toBeVisible();
+    await expect(page.getByText('Merkbescherming').first()).toBeVisible();
+    await page.goto('/platform/notificaties');
+    await expect(page.getByRole('heading', { level: 1, name: 'Notificaties' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Versturen' })).toBeVisible();
   });
 });

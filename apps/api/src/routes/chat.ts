@@ -21,14 +21,14 @@ function assertChatFeature(app: FastifyInstance, organizationId: string): void {
  * Demo identity via `x-demo-role` / `x-demo-user-id`.
  */
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/threads', async () => {
-    const organizationId = getOrganizationId(app);
+  app.get('/threads', async (request) => {
+    const organizationId = getOrganizationId(request);
     const threads = app.orgStore.listThreads(organizationId);
     return { threads };
   });
 
   app.post('/threads', async (request: FastifyRequest, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     assertChatFeature(app, organizationId);
     const input = createChatThreadSchema.parse(request.body);
     const { actorUserId, actorDisplayName } = resolveDemoRequestContext(request);
@@ -46,7 +46,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/threads/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const thread = app.orgStore.getThread(organizationId, request.params.id);
     if (!thread) {
       return reply.status(404).send({
@@ -59,7 +59,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/threads/:id/messages', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     assertChatFeature(app, organizationId);
     const input = createChatMessageSchema.parse(request.body);
     const { actorUserId, actorDisplayName } = resolveDemoRequestContext(request);

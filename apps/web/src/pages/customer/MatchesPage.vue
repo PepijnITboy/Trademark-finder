@@ -27,6 +27,9 @@ import { useToastStore } from '../../stores/toast';
 import type { TrademarkMatchRecord } from '../../api/types';
 import ReasonDialog from './match-dossier/ReasonDialog.vue';
 
+type SortKey = 'watched' | 'candidate' | 'score' | 'niceClasses' | 'deadline' | 'status';
+type SortDir = 'asc' | 'desc';
+
 const route = useRoute();
 const router = useRouter();
 const toast = useToastStore();
@@ -43,7 +46,8 @@ const archiveMatch = useArchiveMatch();
 
 const priorityFilter = ref<PriorityLevel | 'all'>('all');
 const searchTerm = ref('');
-const sortOrder = ref<'score_desc' | 'score_asc'>('score_desc');
+const sortKey = ref<SortKey>('score');
+const sortDir = ref<SortDir>('desc');
 
 const PRIORITY_OPTIONS = [
   { value: 'all', label: 'Alle prioriteiten' },
@@ -52,17 +56,37 @@ const PRIORITY_OPTIONS = [
   { value: 'low', label: 'Laag' },
 ] as const;
 
-const SORT_OPTIONS = [
-  { value: 'score_desc', label: 'Score: hoog → laag' },
-  { value: 'score_asc', label: 'Score: laag → hoog' },
-] as const;
-
 const rejectTarget = ref<TrademarkMatchRecord | null>(null);
+const animatingId = ref<string | null>(null);
+const animatingKind = ref<'accept' | 'reject' | null>(null);
 const archiveTarget = ref<TrademarkMatchRecord | null>(null);
 
 const busy = computed(
   () => acceptMatch.isPending.value || rejectMatch.isPending.value || archiveMatch.isPending.value,
 );
+
+function daysRemaining(match: TrademarkMatchRecord): number | null {
+  const deadline = match.candidate.oppositionDeadline?.deadlineDate;
+  if (!deadline) return null;
+  return Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function sortValue(match: TrademarkMatchRecord, key: SortKey): string | number {
+  switch (key) {
+    case 'watched':
+      return match.watchedTrademarkLabel.toLowerCase();
+    case 'candidate':
+      return match.candidate.markText.toLowerCase();
+    case 'score':
+      return match.totalScore;
+    case 'niceClasses':
+      return match.candidate.niceClasses.join(',');
+    case 'deadline':
+      return match.candidate.oppositionDeadline?.deadlineDate ?? '';
+    case 'status':
+      return match.status;
+  }
+}
 
 const filteredMatches = computed(() => {
   const all = matchesQuery.data.value ?? [];
@@ -77,27 +101,38 @@ const filteredMatches = computed(() => {
     }
     return true;
   });
-  const dir = sortOrder.value === 'score_desc' ? -1 : 1;
-  return [...filtered].sort((a, b) => dir * (a.totalScore - b.totalScore));
+  const dir = sortDir.value === 'asc' ? 1 : -1;
+  return [...filtered].sort((a, b) => {
+    const av = sortValue(a, sortKey.value);
+    const bv = sortValue(b, sortKey.value);
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
 });
 
 const pendingCount = computed(() => matchesQuery.data.value?.length ?? 0);
 
+function sortLabel(label: string, key: SortKey): string {
+  if (sortKey.value !== key) return `${label} ↕`;
+  return `${label} ${sortDir.value === 'asc' ? '↑' : '↓'}`;
+}
+
 const columns = computed((): readonly DataTableColumn<TrademarkMatchRecord>[] => {
   const base: DataTableColumn<TrademarkMatchRecord>[] = [
-    { key: 'watched', label: 'Eigenmerk' },
-    { key: 'candidate', label: 'Match gevonden' },
-    { key: 'score', label: 'Score', align: 'right', width: '5.5rem' },
+    { key: 'watched', label: sortLabel('Eigen merk', 'watched') },
+    { key: 'candidate', label: sortLabel('Match', 'candidate') },
+    { key: 'score', label: sortLabel('Score', 'score'), align: 'right', width: '5.5rem' },
     { key: 'topComponent', label: 'Hoogste', width: '9rem' },
-    { key: 'niceClasses', label: 'Klassen', width: '8rem' },
+    { key: 'niceClasses', label: sortLabel('Klassen', 'niceClasses'), width: '8rem' },
   ];
   if (isPossible.value) {
     return [...base, { key: 'actions', label: 'Acties', width: '8rem', align: 'center' }];
   }
   return [
     ...base,
-    { key: 'deadline', label: 'Termijn', width: '10rem' },
-    { key: 'status', label: 'Status', width: '10rem' },
+    { key: 'deadline', label: sortLabel('Deadline', 'deadline'), width: '10rem' },
+    { key: 'status', label: sortLabel('Status', 'status'), width: '10rem' },
     { key: 'actions', label: '', width: '9rem', align: 'right' },
   ];
 });
@@ -105,27 +140,44 @@ const columns = computed((): readonly DataTableColumn<TrademarkMatchRecord>[] =>
 const inputClass =
   'rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
-function daysRemaining(match: TrademarkMatchRecord): number | null {
-  const deadline = match.candidate.oppositionDeadline?.deadlineDate;
-  if (!deadline) return null;
-  return Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-}
-
 function goToMatch(match: TrademarkMatchRecord): void {
   void router.push({ name: 'app-match-detail', params: { id: match.id } });
+}
+
+function toggleSort(key: SortKey): void {
+  if (sortKey.value === key) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortKey.value = key;
+    sortDir.value = key === 'score' ? 'desc' : 'asc';
+  }
+}
+
+function onHeaderClick(columnKey: string): void {
+  const sortable: SortKey[] = ['watched', 'candidate', 'score', 'niceClasses', 'deadline', 'status'];
+  if ((sortable as string[]).includes(columnKey)) toggleSort(columnKey as SortKey);
 }
 
 function clearFilters(): void {
   priorityFilter.value = 'all';
   searchTerm.value = '';
-  sortOrder.value = 'score_desc';
+  sortKey.value = 'score';
+  sortDir.value = 'desc';
 }
 
-function accept(row: TrademarkMatchRecord): void {
-  acceptMatch.mutate(row.id, {
-    onSuccess: () => toast.success('Match gemarkeerd als relevant — verplaatst naar actieve matches'),
-    onError: () => toast.error('Accepteren is mislukt. Probeer het opnieuw.'),
-  });
+async function accept(row: TrademarkMatchRecord): Promise<void> {
+  animatingId.value = row.id;
+  animatingKind.value = 'accept';
+  try {
+    await acceptMatch.mutateAsync(row.id);
+    await new Promise((r) => setTimeout(r, 420));
+    toast.success('Match gemarkeerd als relevant — verplaatst naar actieve matches');
+  } catch {
+    toast.error('Accepteren is mislukt. Probeer het opnieuw.');
+  } finally {
+    animatingId.value = null;
+    animatingKind.value = null;
+  }
 }
 
 function openReject(row: TrademarkMatchRecord): void {
@@ -134,12 +186,19 @@ function openReject(row: TrademarkMatchRecord): void {
 
 async function confirmReject(reason: string): Promise<void> {
   if (!rejectTarget.value || reason.trim().length === 0) return;
+  const id = rejectTarget.value.id;
+  animatingId.value = id;
+  animatingKind.value = 'reject';
   try {
-    await rejectMatch.mutateAsync({ id: rejectTarget.value.id, reason: reason.trim() });
+    await rejectMatch.mutateAsync({ id, reason: reason.trim() });
     rejectTarget.value = null;
+    await new Promise((r) => setTimeout(r, 320));
     toast.success('Match als niet relevant naar archief verplaatst');
   } catch {
     toast.error('Afwijzen is mislukt. Probeer het opnieuw.');
+  } finally {
+    animatingId.value = null;
+    animatingKind.value = null;
   }
 }
 
@@ -157,6 +216,11 @@ function confirmArchive(): void {
     },
     onError: () => toast.error('Archiveren is mislukt. Probeer het opnieuw.'),
   });
+}
+
+function rowClass(row: TrademarkMatchRecord): string {
+  if (animatingId.value !== row.id) return '';
+  return animatingKind.value === 'accept' ? 'mw-row-accept' : 'mw-row-reject';
 }
 </script>
 
@@ -193,9 +257,8 @@ function confirmArchive(): void {
         :class="inputClass"
       />
       <MwSelect id="priority-filter" v-model="priorityFilter" :options="PRIORITY_OPTIONS" />
-      <MwSelect id="score-sort" v-model="sortOrder" :options="SORT_OPTIONS" />
       <MwButton
-        v-if="priorityFilter !== 'all' || searchTerm || sortOrder !== 'score_desc'"
+        v-if="priorityFilter !== 'all' || searchTerm || sortKey !== 'score' || sortDir !== 'desc'"
         size="sm"
         variant="tertiary"
         @click="clearFilters"
@@ -214,14 +277,16 @@ function confirmArchive(): void {
         :rows="filteredMatches"
         :row-key="(row) => row.id"
         :loading="matchesQuery.isLoading.value"
-        :clickable-rows="!isPossible"
-        :empty-title="isPossible ? 'Geen mogelijke matches' : 'Geen actieve matches'"
+        clickable-rows
+        :row-class="rowClass"
+        empty-title="Geen matches"
         :empty-description="
           isPossible
             ? 'Nieuwe registerpublicaties verschijnen hier zodra ze zijn vergeleken met uw bewaakte merken.'
             : 'Accepteer mogelijke matches om ze hier te behandelen.'
         "
         @row-click="goToMatch"
+        @header-click="onHeaderClick"
       >
         <template #cell-watched="{ row }">{{ row.watchedTrademarkLabel }}</template>
         <template #cell-candidate="{ row }">
@@ -236,7 +301,10 @@ function confirmArchive(): void {
         </template>
         <template #cell-niceClasses="{ row }">{{ formatNiceClasses(row.candidate.niceClasses) }}</template>
         <template #cell-deadline="{ row }">
-          <DeadlineIndicator :days-remaining="daysRemaining(row)" />
+          <DeadlineIndicator
+            :days-remaining="daysRemaining(row)"
+            :deadline-date="row.candidate.oppositionDeadline?.deadlineDate"
+          />
         </template>
         <template #cell-status="{ row }">
           <StatusBadge :label="MATCH_STATUS_LABELS_NL[row.status]" tone="neutral" />
@@ -305,3 +373,22 @@ function confirmArchive(): void {
     />
   </MwPage>
 </template>
+
+<style scoped>
+:deep(.mw-row-accept) {
+  animation: mw-accept-out 0.42s ease forwards;
+  background: color-mix(in srgb, var(--color-success, #16a34a) 12%, transparent);
+}
+:deep(.mw-row-reject) {
+  animation: mw-reject-out 0.32s ease forwards;
+  opacity: 0.55;
+}
+@keyframes mw-accept-out {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(24px); opacity: 0; }
+}
+@keyframes mw-reject-out {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.98); opacity: 0; }
+}
+</style>

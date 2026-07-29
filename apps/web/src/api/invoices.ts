@@ -29,7 +29,12 @@ export function invoicePdfUrl(id: string): string {
   return `${API_BASE_URL}/api/v1/invoices/${id}/pdf`;
 }
 
+export function invoiceUblUrl(id: string): string {
+  return `${API_BASE_URL}/api/v1/invoices/${id}/ubl`;
+}
+
 export const INVOICE_STATUS_LABELS_NL = {
+  draft: 'Concept',
   open: 'Open',
   paid: 'Betaald',
   void: 'Geannuleerd',

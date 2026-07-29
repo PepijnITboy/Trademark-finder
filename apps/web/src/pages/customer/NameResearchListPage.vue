@@ -8,7 +8,6 @@ import StatusBadge, { type BadgeTone } from '../../components/StatusBadge.vue';
 import {
   formatEuroCents,
   formatScopeSummary,
-  useNameResearchCredits,
   useNameResearchOrders,
   type NameResearchOrderRecord,
 } from '../../api/name-research';
@@ -17,10 +16,8 @@ import { NAME_RESEARCH_DISCLAIMER_NL } from '@merkwacht/domain';
 
 const router = useRouter();
 const ordersQuery = useNameResearchOrders();
-const creditsQuery = useNameResearchCredits();
 
 const orders = computed(() => ordersQuery.data.value ?? []);
-const credits = computed(() => creditsQuery.data.value);
 
 const columns: readonly DataTableColumn<NameResearchOrderRecord>[] = [
   { key: 'markText', label: 'Merknaam' },
@@ -63,17 +60,14 @@ function go(order: NameResearchOrderRecord): void {
     <p class="text-xs leading-relaxed text-text-muted">{{ NAME_RESEARCH_DISCLAIMER_NL }}</p>
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <MwCard title="Credits">
-        <p class="text-2xl font-semibold tabular-nums">
-          {{ credits?.balance ?? '—' }}
-          <span class="text-sm font-normal text-text-muted">beschikbaar</span>
-        </p>
-        <p class="mt-1 text-xs text-text-muted">
-          Gebruikt deze periode: {{ credits?.usedThisPeriod ?? 0 }}
-        </p>
-      </MwCard>
       <MwCard title="Rapporten">
         <p class="text-2xl font-semibold tabular-nums">{{ orders.length }}</p>
+        <p class="mt-1 text-xs text-text-muted">Afgeronde en lopende pre-filing scans</p>
+      </MwCard>
+      <MwCard title="Betaling">
+        <p class="text-sm text-text-muted">
+          Elk onderzoek wordt apart gefactureerd. Openstaande bedragen ziet u onder Betalingen.
+        </p>
       </MwCard>
     </div>
 
@@ -108,7 +102,7 @@ function go(order: NameResearchOrderRecord): void {
           <span v-else class="text-text-muted">—</span>
         </template>
         <template #cell-price="{ row }">
-          {{ row.creditUsed ? '1 credit' : formatEuroCents(row.priceCents) }}
+          {{ formatEuroCents(row.priceCents) }}
         </template>
         <template #cell-createdAt="{ row }">{{ formatDate(row.createdAt) }}</template>
       </DataTable>

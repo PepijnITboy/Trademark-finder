@@ -4,6 +4,7 @@ import {
   archiveMatchStatus,
   canMarkRelevant,
   dismissAsNotRelevant,
+  expireDeadlineMatchStatus,
   isDeadlineEligibleStatus,
   matchQueueForStatus,
   passesScoreThreshold,
@@ -59,10 +60,16 @@ describe('triage transitions', () => {
 });
 
 describe('deadlines and threshold', () => {
-  it('only active statuses are deadline-eligible', () => {
-    expect(isDeadlineEligibleStatus('new')).toBe(false);
+  it('includes possible (new) and active statuses as deadline-eligible', () => {
+    expect(isDeadlineEligibleStatus('new')).toBe(true);
     expect(isDeadlineEligibleStatus('under_review')).toBe(true);
     expect(isDeadlineEligibleStatus('dismissed')).toBe(false);
+  });
+
+  it('expireDeadlineMatchStatus archives eligible matches', () => {
+    expect(expireDeadlineMatchStatus('new')).toBe('opposition_deadline_passed');
+    expect(expireDeadlineMatchStatus('under_review')).toBe('opposition_deadline_passed');
+    expect(expireDeadlineMatchStatus('dismissed')).toBeNull();
   });
 
   it('passesScoreThreshold compares inclusive', () => {

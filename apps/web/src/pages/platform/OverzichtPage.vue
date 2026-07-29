@@ -1,17 +1,50 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useQuery } from '@tanstack/vue-query';
 import KpiCard from '../../components/KpiCard.vue';
 import MwBanner from '../../components/MwBanner.vue';
 import MwCard from '../../components/MwCard.vue';
 import StatusBadge from '../../components/StatusBadge.vue';
+import { apiRequest } from '../../api/client';
 import { usePlatformHealth } from '../../api/platform';
-import { useRegisterSources } from '../../api/register-sources';
+import type { RegisterCatalogRecord } from '../../api/name-research';
 import { formatDateTime } from '../../lib/format';
 import PlatformPageHeader from './PlatformPageHeader.vue';
 
-const healthQuery = usePlatformHealth();
-const sourcesQuery = useRegisterSources();
+interface RuntimeState {
+  registryCode: string;
+  lastProbeStatus: string | null;
+}
 
-const okSources = () => (sourcesQuery.data.value ?? []).filter((s) => s.status === 'ok').length;
+const healthQuery = usePlatformHealth();
+
+const cockpitQuery = useQuery({
+  queryKey: ['platform', 'register-catalog', 'cockpit', 'overview-kpis'],
+  queryFn: async () =>
+    apiRequest<{
+      registers: readonly RegisterCatalogRecord[];
+      runtime: readonly RuntimeState[];
+    }>('/api/platform/register-catalog/cockpit'),
+});
+
+const runtimeByCode = computed(() => {
+  const map = new Map<string, RuntimeState>();
+  for (const r of cockpitQuery.data.value?.runtime ?? []) map.set(r.registryCode, r);
+  return map;
+});
+
+function isActief(row: RegisterCatalogRecord): boolean {
+  const rt = runtimeByCode.value.get(row.code);
+  return row.connectorStatus === 'live' && row.enabledForWatch && rt?.lastProbeStatus === 'ok';
+}
+
+const registersActief = computed(
+  () => (cockpitQuery.data.value?.registers ?? []).filter(isActief).length,
+);
+const registersNietActief = computed(() => {
+  const all = cockpitQuery.data.value?.registers ?? [];
+  return Math.max(0, all.length - registersActief.value);
+});
 </script>
 
 <template>
@@ -20,7 +53,7 @@ const okSources = () => (sourcesQuery.data.value ?? []).filter((s) => s.status =
     description="Systeembrede status van de Merkwacht-infrastructuur, ongeacht individuele klantorganisaties."
   >
     <MwCard title="Systeemstatus">
-      <section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p class="text-xs font-medium text-text-muted">API-status</p>
           <div class="mt-2">
@@ -32,7 +65,18 @@ const okSources = () => (sourcesQuery.data.value ?? []).filter((s) => s.status =
             <div v-else class="h-5 w-24 animate-pulse rounded bg-surface-muted" />
           </div>
         </div>
-        <KpiCard label="Registers actief" :value="okSources()" :loading="sourcesQuery.isLoading.value" hint="van de gekoppelde registers" />
+        <KpiCard
+          label="Registers actief"
+          :value="registersActief"
+          :loading="cockpitQuery.isLoading.value"
+          hint="live + aan voor klanten + groene test"
+        />
+        <KpiCard
+          label="Registers niet actief"
+          :value="registersNietActief"
+          :loading="cockpitQuery.isLoading.value"
+          hint="uit, geen test, of niet aangezet"
+        />
         <div>
           <p class="text-xs font-medium text-text-muted">Laatst gecontroleerd</p>
           <p class="mt-1 text-sm text-text">
@@ -42,10 +86,9 @@ const okSources = () => (sourcesQuery.data.value ?? []).filter((s) => s.status =
       </section>
     </MwCard>
 
-    <MwBanner tone="info" title="Multi-tenant metrics volgen">
-      Merkwacht draait momenteel als één werkruimte per omgeving. Klantoverstijgende metrics (aantal klanten,
-      totaal aantal bewaakte merken, platformbrede matchvolumes) worden hier zichtbaar zodra de multi-tenant
-      beheer-API beschikbaar is.
+    <MwBanner tone="info" title="Catalogus-waarheid">
+      Registers actief telt alleen connectors die live staan, voor klanten aan staan, én een geslaagde
+      verbindingstest hebben — dezelfde regel als “Beschermd” bij klantmerken.
     </MwBanner>
   </PlatformPageHeader>
 </template>

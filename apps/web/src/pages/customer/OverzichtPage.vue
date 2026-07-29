@@ -14,6 +14,7 @@ import { MATCH_STATUS_LABELS_NL, useMatches } from '../../api/matches';
 import { useNameResearchOrders } from '../../api/name-research';
 import { useNotifications } from '../../api/notifications';
 import { WATCHED_TRADEMARK_STATUS_LABELS_NL, useWatchedTrademarks } from '../../api/watched-trademarks';
+import { resolveProtectionDisplay } from '@merkwacht/domain';
 import { formatDate, formatMatchScorePercent, formatNiceClasses } from '../../lib/format';
 import { priorityFromScore } from '../../lib/priority';
 import type { TrademarkMatchRecord } from '../../api/types';
@@ -40,10 +41,26 @@ const isLoadingLists = computed(
 );
 
 const activeWatches = computed(
-  () => watchedTrademarks.value.filter((w) => w.status === 'active' && w.eligibility.eligible).length,
+  () =>
+    watchedTrademarks.value.filter((w) =>
+      resolveProtectionDisplay({
+        status: w.status,
+        eligibility: w.eligibility,
+        registerMonitoringOk: w.registerMonitoringOk ?? false,
+      }).activelyProtected,
+    ).length,
 );
 const pendingActivation = computed(
-  () => watchedTrademarks.value.filter((w) => w.status === 'active' && !w.eligibility.eligible).length,
+  () =>
+    watchedTrademarks.value.filter(
+      (w) =>
+        w.status === 'active' &&
+        !resolveProtectionDisplay({
+          status: w.status,
+          eligibility: w.eligibility,
+          registerMonitoringOk: w.registerMonitoringOk ?? false,
+        }).activelyProtected,
+    ).length,
 );
 const newMatches = computed(() => possibleMatches.value.filter((m) => m.status === 'new').length);
 const highPriority = computed(
@@ -59,7 +76,7 @@ const topMatches = computed(() =>
 );
 const matchColumns: readonly DataTableColumn<TrademarkMatchRecord>[] = [
   { key: 'priority', label: 'Prioriteit', width: '9rem' },
-  { key: 'watched', label: 'Eigenmerk' },
+  { key: 'watched', label: 'Eigen merk' },
   { key: 'candidate', label: 'Match gevonden' },
   { key: 'score', label: 'Score', align: 'right', width: '6rem' },
   { key: 'status', label: 'Status', width: '9rem' },
@@ -147,7 +164,10 @@ function goToMatch(match: TrademarkMatchRecord): void {
                 <p class="truncate font-medium text-text">{{ entry.candidateMarkText }}</p>
                 <p class="truncate text-xs text-text-muted">vs. {{ entry.watchedTrademarkLabel }}</p>
               </div>
-              <DeadlineIndicator :days-remaining="entry.daysRemaining" />
+              <DeadlineIndicator
+                :days-remaining="entry.daysRemaining"
+                :deadline-date="entry.deadline?.deadlineDate"
+              />
             </RouterLink>
           </li>
         </ul>

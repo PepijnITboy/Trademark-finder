@@ -34,8 +34,8 @@ const exportQuerySchema = z.object({
   format: z.enum(['csv', 'html', 'pdf']).default('csv'),
 });
 
-function getOrganizationId(app: FastifyInstance): string {
-  return app.identityProvider.getIdentity().organizationId;
+function getOrganizationId(request: FastifyRequest): string {
+  return request.tenant!.organizationId;
 }
 
 function notFound(reply: FastifyReply, referenceCode: string): FastifyReply {
@@ -73,7 +73,7 @@ const MATCH_EXPORT_COLUMNS: Array<ExportColumn<TrademarkMatchRecord>> = [
  */
 export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async (request: FastifyRequest) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const { status, queue } = listQuerySchema.parse(request.query);
     let matches = await app.store.listMatches(organizationId, status ? { status } : {});
     if (queue) {
@@ -84,14 +84,14 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const match = await app.store.getMatch(organizationId, request.params.id);
     if (!match) return notFound(reply, request.correlationId ?? request.params.id);
     return { match };
   });
 
   app.patch('/:id/status', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const { status } = matchStatusUpdateSchema.parse(request.body);
     const existing = await app.store.getMatch(organizationId, request.params.id);
     if (!existing) return notFound(reply, request.correlationId ?? request.params.id);
@@ -106,14 +106,14 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const reviewedBy = app.identityProvider.getIdentity().userId;
+    const reviewedBy = request.tenant!.userId;
     const updated = await app.store.updateMatchStatus(organizationId, request.params.id, status, reviewedBy);
     if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
     return { match: updated };
   });
 
   app.post('/:id/accept', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const existing = await app.store.getMatch(organizationId, request.params.id);
     if (!existing) return notFound(reply, request.correlationId ?? request.params.id);
     const next = acceptMatchStatus(existing.status);
@@ -124,14 +124,14 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
         'Alleen mogelijke matches (nieuw) kunnen worden geaccepteerd.',
       );
     }
-    const reviewedBy = app.identityProvider.getIdentity().userId;
+    const reviewedBy = request.tenant!.userId;
     const updated = await app.store.updateMatchStatus(organizationId, request.params.id, next, reviewedBy);
     if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
     return { match: updated };
   });
 
   app.post('/:id/reject', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const { reason } = rejectSchema.parse(request.body);
     const existing = await app.store.getMatch(organizationId, request.params.id);
     if (!existing) return notFound(reply, request.correlationId ?? request.params.id);
@@ -144,14 +144,14 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
       );
     }
     await app.store.addMatchNote(organizationId, request.params.id, `Niet relevant: ${reason}`);
-    const reviewedBy = app.identityProvider.getIdentity().userId;
+    const reviewedBy = request.tenant!.userId;
     const updated = await app.store.updateMatchStatus(organizationId, request.params.id, next, reviewedBy);
     if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
     return { match: updated };
   });
 
   app.post('/:id/archive', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const existing = await app.store.getMatch(organizationId, request.params.id);
     if (!existing) return notFound(reply, request.correlationId ?? request.params.id);
     const next = archiveMatchStatus(existing.status);
@@ -162,14 +162,14 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
         'Alleen actieve matches kunnen naar het archief.',
       );
     }
-    const reviewedBy = app.identityProvider.getIdentity().userId;
+    const reviewedBy = request.tenant!.userId;
     const updated = await app.store.updateMatchStatus(organizationId, request.params.id, next, reviewedBy);
     if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
     return { match: updated };
   });
 
   app.post('/:id/notes', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const { note } = addNoteSchema.parse(request.body);
     const created = await app.store.addMatchNote(organizationId, request.params.id, note);
     if (!created) return notFound(reply, request.correlationId ?? request.params.id);
@@ -179,7 +179,7 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/:id/request-advisor',
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const organizationId = getOrganizationId(app);
+      const organizationId = getOrganizationId(request);
       const updated = await app.store.requestAdvisorReview(organizationId, request.params.id);
       if (!updated) return notFound(reply, request.correlationId ?? request.params.id);
       return { match: updated };
@@ -187,7 +187,7 @@ export async function registerMatchRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.get('/:id/export', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const organizationId = getOrganizationId(app);
+    const organizationId = getOrganizationId(request);
     const { format } = exportQuerySchema.parse(request.query);
     const match = await app.store.getMatch(organizationId, request.params.id);
     if (!match) return notFound(reply, request.correlationId ?? request.params.id);

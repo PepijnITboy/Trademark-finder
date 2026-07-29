@@ -6,10 +6,13 @@ naam tegen bestaande merken in gekozen registers, **met Nice-klassen per registe
 
 ## Productflow
 
-1. Wizard: merknaam (+ optionele niche) → registers & klassen per register → drempel (filter) → betalen
-2. Betaling: **1 credit = 1 volledige order**, of Stripe Checkout purpose `name_research_order`
-3. Uitvoering: progress per register; BOIP live (demo-fixtures); overige registers `pending_connector`
-4. Rapport: risicoscore, eindadvies, hitlijst met detail (houder, data, scores), disclaimer, CTA **Merk aanvragen via bureau** (chat, geen abonnement vereist)
+1. Wizard: merknaam → registers & klassen per register (**Alle klassen** als full-width primaire actie) → toelichting (optioneel) → **betalen**
+2. Hit-filter: vaste interne drempel `NAME_RESEARCH_DEFAULT_THRESHOLD` (40%) — geen drempel-UI in de wizard
+3. Betaling: **per order** (Stripe Checkout purpose `name_research_order`); altijd een factuurrij in Betalingen
+4. Uitvoering: progress per register; BOIP live (demo-fixtures); overige registers `pending_connector`
+5. Rapport: risicoscore, eindadvies, hitlijst met detail (houder, data, scores), disclaimer, CTA **Merk aanvragen via bureau** (chat, geen abonnement vereist)
+
+Product-UX toont **rapporten + betaling** — geen credit-saldo of “1 credit gebruiken” in de UI. Backend credits mogen intern blijven voor migratie.
 
 ## Prijs
 
@@ -17,8 +20,8 @@ naam tegen bestaande merken in gekozen registers, **met Nice-klassen per registe
 quoteCents = sum(basePriceCents[register])
 ```
 
-- Drempel heeft **geen** prijsimpact — alleen filter op zichtbare hits + waarschuwing bij lage %
-- Platform beheert `basePriceCents` en connectorstatus in `/platform/registers`
+- Drempel heeft **geen** prijsimpact — alleen filter op zichtbare hits
+- Platform beheert `basePriceCents` onder **Systeem → Prijzen**; connector health onder **Operatie → Registers**
 
 ## Scopes
 
@@ -32,8 +35,9 @@ Per register eigen klassen (bv. Benelux 9/35/42 én EUIPO alleen 9). Scan filter
 
 - Entities: `NameResearchOrder`, `NameResearchHit`, `RegisterCatalogEntry` — **geen** `TrademarkMatch`
 - Klant: `/api/v1/name-research/*`
-- Platform: `/api/platform/register-catalog`, `/api/platform/name-research` (scopes, niche, voortgang)
+- Platform: `/api/platform/register-catalog`, orderfeed via klantdetail / operatie-aggregaten
 - Scoring-profiel: `clearance-v1` (risico aangevallen te worden)
+- API-veld `intendedNicheNl` blijft voor compat; UI noemt dit **toelichting**
 
 ## Disclaimer
 
@@ -45,3 +49,5 @@ geen registratiegarantie). Zie ook `docs/product/legal-language.md`.
 - Echte online depot-indiening bij BOIP/EUIPO
 - Live EUIPO/DE/FR/ES/WIPO connectors in v1 (catalogus + pending wel)
 - Hergebruik van `TrademarkMatch` voor research
+- Drempel terug in de wizard-UI
+- Credit-balans als productconcept in de UI

@@ -30,8 +30,13 @@ export const queryKeys = {
   },
   platformHealth: ['platform', 'health'] as const,
   platformPlans: ['platform', 'plans'] as const,
+  platformOrganizations: ['platform', 'organizations'] as const,
+  platformOrganization: (id: string) => ['platform', 'organizations', id] as const,
   platformChatThreads: ['platform', 'chat', 'threads'] as const,
   platformBilling: ['platform', 'billing'] as const,
+  platformImportSyncs: ['platform', 'import-syncs'] as const,
+  platformNotifications: ['platform', 'notifications'] as const,
+  inAppNotifications: ['notifications', 'in-app'] as const,
   nameResearch: {
     credits: ['name-research', 'credits'] as const,
     orders: ['name-research', 'orders'] as const,

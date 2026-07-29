@@ -1,7 +1,7 @@
 import type { CandidateApplication, TrademarkMatch, WatchedTrademark } from '@merkwacht/domain';
 import { normalizeMarkName } from '@merkwacht/normalization';
 import { generatePhoneticRepresentations } from '@merkwacht/phonetics';
-import { scoreMatch, type ScoringContext } from '@merkwacht/scoring';
+import { getActiveWeightProfile, scoreMatch, type ScoringContext } from '@merkwacht/scoring';
 import { isWithinOppositionWindow } from './opposition-candidates.js';
 import type { PipelineContext } from './types.js';
 
@@ -59,7 +59,14 @@ export async function scoreAndUpsertMatch(
   }
 
   const scoringContext = buildScoringContext(watched, candidate);
-  const result = await scoreMatch(scoringContext, context.ai ? { ai: context.ai } : {});
+  // Picks up whatever weight profile `/api/platform/scoring/weights` last
+  // published *within this process* (see `packages/scoring/src/weight-profile.ts`).
+  // Like every other in-memory store in this codebase, this doesn't sync across
+  // the `apps/api`/`apps/worker` process boundary - see `docs/scoring/weights.md`.
+  const result = await scoreMatch(scoringContext, {
+    weightProfile: getActiveWeightProfile(),
+    ...(context.ai ? { ai: context.ai } : {}),
+  });
 
   if (result.totalScore < MATCH_CREATION_MIN_TOTAL_SCORE) {
     return { match: null, isNew: false, totalScore: result.totalScore };

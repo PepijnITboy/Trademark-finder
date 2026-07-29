@@ -34,6 +34,8 @@ export interface WatchedTrademarkRecord {
   readonly niceClasses: readonly number[];
   readonly eligibility: WatchEligibilityDecision;
   readonly watchSettings: WatchedTrademarkWatchSettings;
+  /** Live + enabledForWatch + last probe ok for this watch's register. */
+  readonly registerMonitoringOk: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -84,16 +86,12 @@ export interface OrganizationSettingsRecord {
   readonly organizationId: string;
   readonly locale: string;
   readonly timezone: string;
-  readonly notificationEmail: string;
-  readonly digestFrequency: DigestFrequency;
   readonly updatedAt: string;
 }
 
 export interface UpdateOrganizationSettingsInput {
   readonly locale?: string;
   readonly timezone?: string;
-  readonly notificationEmail?: string;
-  readonly digestFrequency?: DigestFrequency;
 }
 
 export interface DeadlineEntry {
@@ -205,8 +203,10 @@ export interface NotificationRecipientRecord {
   readonly id: string;
   readonly organizationId: string;
   email: string;
+  mode: 'threshold' | 'digest';
+  digestCadence: DigestFrequency | null;
   digestFrequency: DigestFrequency;
-  minScoreThreshold: number;
+  minScoreThreshold: number | null;
   isActive: boolean;
   watchedTrademarkIds: readonly string[];
   readonly createdAt: string;
@@ -215,15 +215,17 @@ export interface NotificationRecipientRecord {
 
 export interface CreateNotificationRecipientInput {
   readonly email: string;
-  readonly digestFrequency?: DigestFrequency;
-  readonly minScoreThreshold?: number;
+  readonly mode: 'threshold' | 'digest';
+  readonly digestCadence?: DigestFrequency | null;
+  readonly minScoreThreshold?: number | null;
   readonly allWatches?: boolean;
   readonly watchedTrademarkIds?: readonly string[];
 }
 
 export interface UpdateNotificationRecipientInput {
-  readonly digestFrequency?: DigestFrequency;
-  readonly minScoreThreshold?: number;
+  readonly mode?: 'threshold' | 'digest';
+  readonly digestCadence?: DigestFrequency | null;
+  readonly minScoreThreshold?: number | null;
   readonly isActive?: boolean;
   readonly allWatches?: boolean;
   readonly watchedTrademarkIds?: readonly string[];
@@ -247,6 +249,8 @@ export interface SubscriptionStateRecord {
   status: SubscriptionStatus;
   pendingPlan: SubscriptionPlan | null;
   currentPeriodEnd: string;
+  cancelAtPeriodEnd?: boolean;
+  nextInvoiceAt?: string | null;
   updatedAt: string;
 }
 
@@ -258,6 +262,7 @@ export interface PlanCatalogRecord {
   maxNotificationEmails: number;
   supportTier: SupportTier;
   features: Readonly<Record<FeatureFlag, boolean>>;
+  isActive: boolean;
   updatedAt: string;
 }
 
@@ -273,7 +278,14 @@ export interface SubscriptionEntitlements {
   readonly currentPeriodEnd: string | null;
 }
 
-export type InvoiceStatus = 'open' | 'paid' | 'void';
+export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void';
+
+export interface InvoiceLineItemRecord {
+  readonly description: string;
+  readonly exVatCents: number;
+  readonly btwCents: number;
+  readonly incVatCents: number;
+}
 
 export interface InvoiceRecord {
   readonly id: string;
@@ -281,15 +293,54 @@ export interface InvoiceRecord {
   number: string;
   status: InvoiceStatus;
   amountCents: number;
+  exVatCents?: number;
+  btwCents?: number;
+  currency?: 'EUR';
   description: string;
+  lineItems?: readonly InvoiceLineItemRecord[];
   paidAt: string | null;
+  dueAt?: string | null;
   pdfAvailable: boolean;
+  ublXmlAvailable?: boolean;
   readonly createdAt: string;
   updatedAt: string;
 }
 
 export interface PlatformInvoiceRecord extends InvoiceRecord {
   readonly organizationName: string;
+  readonly internalNote: string | null;
+}
+
+export interface PlatformOrganizationListItem {
+  readonly id: string;
+  readonly legalName: string;
+  readonly plan: SubscriptionPlan;
+  readonly status: SubscriptionStatus;
+  readonly since: string;
+  readonly openInvoiceCount: number;
+  readonly memberCount: number;
+  readonly watchedTrademarkCount: number;
+}
+
+export interface InAppNotificationRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly kind?: 'match' | 'admin' | 'report_ready' | 'connector_down' | 'invoice' | 'general';
+  readonly sentByUserId: string;
+  readonly createdAt: string;
+  readAt: string | null;
+}
+
+export interface UpdatePlanCatalogInput {
+  readonly displayNameNl?: string;
+  readonly priceMonthlyCents?: number;
+  readonly maxWatchedTrademarks?: number;
+  readonly maxNotificationEmails?: number;
+  readonly supportTier?: SupportTier;
+  readonly features?: Partial<Record<FeatureFlag, boolean>>;
+  readonly isActive?: boolean;
 }
 
 export type SupportThreadStatus = 'open' | 'closed';
@@ -330,13 +381,4 @@ export interface ChatThreadDetail {
 export interface PlatformChatThreadRecord extends SupportThreadRecord {
   readonly messageCount: number;
   readonly organizationName: string;
-}
-
-export interface UpdatePlanCatalogInput {
-  readonly displayNameNl?: string;
-  readonly priceMonthlyCents?: number;
-  readonly maxWatchedTrademarks?: number;
-  readonly maxNotificationEmails?: number;
-  readonly supportTier?: SupportTier;
-  readonly features?: Partial<Record<FeatureFlag, boolean>>;
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { DIGEST_CADENCE_LABELS_NL, formatRecipientNotifySummaryNl } from '@merkwacht/domain';
 import type { DigestFrequency } from '@merkwacht/validation';
 import ConfirmDialog from '../../components/ConfirmDialog.vue';
 import DataTable, { type DataTableColumn } from '../../components/DataTable.vue';
@@ -29,6 +30,7 @@ import {
   useCreateNotificationRecipient,
   useDeleteNotificationRecipient,
   useNotificationRecipients,
+  useUpdateNotificationRecipient,
 } from '../../api/notification-recipients';
 import { useSettings, useUpdateSettings } from '../../api/settings';
 import type { NotificationRecipientRecord, OrganizationMemberRecord } from '../../api/types';
@@ -73,6 +75,7 @@ const removeMember = useRemoveMember();
 
 const recipientsQuery = useNotificationRecipients();
 const createRecipient = useCreateNotificationRecipient();
+const updateRecipient = useUpdateNotificationRecipient();
 const deleteRecipient = useDeleteNotificationRecipient();
 
 const watchedQuery = useWatchedTrademarks();
@@ -215,25 +218,26 @@ function setTheme(mode: ThemeMode): void {
 
 const recipientColumns: readonly DataTableColumn<NotificationRecipientRecord>[] = [
   { key: 'email', label: 'E-mail' },
-  { key: 'digestFrequency', label: 'Frequentie', width: '10rem' },
-  { key: 'minScoreThreshold', label: 'Vanaf score', width: '8rem' },
+  { key: 'trigger', label: 'Melding', width: '14rem' },
   { key: 'watches', label: 'Merken', width: '8rem' },
-  { key: 'actions', label: '', width: '8rem', align: 'right' },
+  { key: 'actions', label: '', width: '10rem', align: 'right' },
 ];
 
 const showAddRecipient = ref(false);
+const editingRecipient = ref<NotificationRecipientRecord | null>(null);
+const recipientFieldError = ref('');
 const recipientForm = reactive({
   email: '',
-  digestFrequency: 'DAILY' as DigestFrequency,
+  mode: 'digest' as 'threshold' | 'digest',
+  digestCadence: 'DAILY' as DigestFrequency,
   minScoreThreshold: 50,
   watchesExpanded: true,
   selectedWatchIds: [] as string[],
 });
 
-const DIGEST_LABELS_NL: Record<DigestFrequency, string> = {
-  DAILY: 'Dagelijks',
-  WEEKLY: 'Wekelijks',
-};
+const DIGEST_OPTIONS = (Object.entries(DIGEST_CADENCE_LABELS_NL) as [DigestFrequency, string][]).map(
+  ([value, label]) => ({ value, label }),
+);
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Beheerder' },
@@ -245,17 +249,29 @@ const LOCALE_OPTIONS = [
   { value: 'en-US', label: 'Engels' },
 ] as const;
 
-const DIGEST_OPTIONS = Object.entries(DIGEST_LABELS_NL).map(([value, label]) => ({
-  value,
-  label,
-}));
-
 function openAddRecipient(): void {
+  editingRecipient.value = null;
+  recipientFieldError.value = '';
   recipientForm.email = '';
-  recipientForm.digestFrequency = 'DAILY';
+  recipientForm.mode = 'digest';
+  recipientForm.digestCadence = 'DAILY';
   recipientForm.minScoreThreshold = 50;
   recipientForm.watchesExpanded = true;
   recipientForm.selectedWatchIds = activeWatches.value.map((w) => w.id);
+  showAddRecipient.value = true;
+}
+
+function openEditRecipient(row: NotificationRecipientRecord): void {
+  editingRecipient.value = row;
+  recipientForm.email = row.email;
+  recipientForm.mode = row.mode;
+  recipientForm.digestCadence = row.digestCadence ?? row.digestFrequency ?? 'DAILY';
+  recipientForm.minScoreThreshold = row.minScoreThreshold ?? 50;
+  recipientForm.watchesExpanded = true;
+  recipientForm.selectedWatchIds =
+    row.watchedTrademarkIds.length > 0
+      ? [...row.watchedTrademarkIds]
+      : activeWatches.value.map((w) => w.id);
   showAddRecipient.value = true;
 }
 
@@ -272,23 +288,58 @@ function toggleWatchSelection(id: string): void {
 }
 
 function submitAddRecipient(): void {
+  recipientFieldError.value = '';
+  const email = recipientForm.email.trim();
+  if (!editingRecipient.value) {
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailOk) {
+      recipientFieldError.value = 'Voer een geldig e-mailadres in (bijv. naam@bedrijf.nl).';
+      return;
+    }
+  }
+
   const allSelected =
-    activeWatches.value.length > 0 &&
-    recipientForm.selectedWatchIds.length === activeWatches.value.length;
+    activeWatches.value.length === 0 ||
+    (activeWatches.value.length > 0 &&
+      recipientForm.selectedWatchIds.length === activeWatches.value.length);
+  const payload = {
+    mode: recipientForm.mode,
+    digestCadence: recipientForm.mode === 'digest' ? recipientForm.digestCadence : null,
+    minScoreThreshold: recipientForm.mode === 'threshold' ? recipientForm.minScoreThreshold : null,
+    allWatches: allSelected,
+    watchedTrademarkIds: allSelected ? undefined : [...recipientForm.selectedWatchIds],
+  };
+
+  const wasEditing = editingRecipient.value;
+
+  if (wasEditing) {
+    updateRecipient.mutate(
+      { id: wasEditing.id, patch: payload },
+      {
+        onSuccess: () => {
+          showAddRecipient.value = false;
+          editingRecipient.value = null;
+          toast.success('Meldingsadres bijgewerkt');
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+        },
+      },
+    );
+    return;
+  }
+
   createRecipient.mutate(
-    {
-      email: recipientForm.email,
-      digestFrequency: recipientForm.digestFrequency,
-      minScoreThreshold: recipientForm.minScoreThreshold,
-      allWatches: allSelected,
-      watchedTrademarkIds: allSelected ? undefined : [...recipientForm.selectedWatchIds],
-    },
+    { email, ...payload },
     {
       onSuccess: () => {
         showAddRecipient.value = false;
         toast.success('Meldingsadres toegevoegd');
       },
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Toevoegen mislukt'),
+      onError: (err) => {
+        recipientFieldError.value = err instanceof Error ? err.message : 'Toevoegen mislukt';
+        toast.error(recipientFieldError.value);
+      },
     },
   );
 }
@@ -360,42 +411,49 @@ function saveLocale(): void {
                 class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               />
             </MwField>
-            <div class="sm:col-span-2">
-            <MwField label="Adres" for-id="address-line">
-              <div class="flex gap-2">
-                <input
-                  id="address-line"
-                  v-model="profileForm.addressLine"
-                  type="text"
-                  class="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                />
-                <MwButton
-                  type="button"
-                  variant="secondary"
-                  :loading="parseAddress.isPending.value"
-                  @click="parseAddressLine"
-                >
-                  Herken
-                </MwButton>
+            <div class="sm:col-span-2 space-y-3 rounded-md border border-border bg-surface-muted/30 p-4">
+              <p class="text-sm font-medium text-text">Vestigingsadres</p>
+              <p class="text-xs text-text-muted">
+                Vul straat en huisnummer in, of plak een volledig adres en gebruik Herken om postcode en plaats te vullen.
+              </p>
+              <MwField label="Straat en huisnummer" for-id="address-line">
+                <div class="flex gap-2">
+                  <input
+                    id="address-line"
+                    v-model="profileForm.addressLine"
+                    type="text"
+                    placeholder="Herengracht 124"
+                    class="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  />
+                  <MwButton
+                    type="button"
+                    variant="secondary"
+                    :loading="parseAddress.isPending.value"
+                    @click="parseAddressLine"
+                  >
+                    Herken
+                  </MwButton>
+                </div>
+              </MwField>
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <MwField label="Postcode" for-id="postal-code">
+                  <input
+                    id="postal-code"
+                    v-model="profileForm.postalCode"
+                    type="text"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  />
+                </MwField>
+                <MwField label="Plaats" for-id="city">
+                  <input
+                    id="city"
+                    v-model="profileForm.city"
+                    type="text"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  />
+                </MwField>
               </div>
-            </MwField>
             </div>
-            <MwField label="Postcode" for-id="postal-code">
-              <input
-                id="postal-code"
-                v-model="profileForm.postalCode"
-                type="text"
-                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              />
-            </MwField>
-            <MwField label="Plaats" for-id="city">
-              <input
-                id="city"
-                v-model="profileForm.city"
-                type="text"
-                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              />
-            </MwField>
             <MwField label="Land (ISO)" for-id="country">
               <input
                 id="country"
@@ -510,7 +568,9 @@ function saveLocale(): void {
           <div class="flex items-center justify-between gap-4 px-5 py-4">
             <div>
               <h2 class="text-base font-semibold text-text">Meldingsadressen</h2>
-              <p class="mt-0.5 text-sm text-text-muted">E-mailadressen die samenvattingen ontvangen per bewaakt merk.</p>
+              <p class="mt-0.5 text-sm text-text-muted">
+                Per adres één trigger: drempelmelding of periodiek rapport. Koppeling aan merken stelt u hier in.
+              </p>
             </div>
             <MwButton variant="primary" size="sm" @click="openAddRecipient">Adres toevoegen</MwButton>
           </div>
@@ -524,11 +584,21 @@ function saveLocale(): void {
           empty-title="Nog geen meldingsadressen"
           empty-description="Voeg een e-mailadres toe om meldingen te ontvangen."
         >
-          <template #cell-digestFrequency="{ row }">{{ DIGEST_LABELS_NL[row.digestFrequency] }}</template>
-          <template #cell-minScoreThreshold="{ row }">{{ row.minScoreThreshold }}%</template>
-          <template #cell-watches="{ row }">{{ row.watchedTrademarkIds.length }}</template>
+          <template #cell-trigger="{ row }">
+            {{
+              formatRecipientNotifySummaryNl({
+                mode: row.mode,
+                digestCadence: row.digestCadence ?? row.digestFrequency,
+                minScoreThreshold: row.minScoreThreshold,
+              })
+            }}
+          </template>
+          <template #cell-watches="{ row }">
+            {{ row.watchedTrademarkIds.length === 0 ? 'Alle' : row.watchedTrademarkIds.length }}
+          </template>
           <template #cell-actions="{ row }">
-            <div class="flex justify-end">
+            <div class="flex justify-end gap-1">
+              <MwButton variant="tertiary" size="sm" @click="openEditRecipient(row)">Bewerken</MwButton>
               <MwButton variant="tertiary" size="sm" @click="removeRecipientTarget = row">Verwijderen</MwButton>
             </div>
           </template>
@@ -608,33 +678,62 @@ function saveLocale(): void {
       @cancel="removeMemberTarget = null"
     />
 
-    <!-- Add recipient dialog -->
+    <!-- Add / edit recipient dialog -->
     <ConfirmDialog
       :open="showAddRecipient"
-      title="Meldingsadres toevoegen"
-      confirm-label="Toevoegen"
-      :busy="createRecipient.isPending.value"
+      :title="editingRecipient ? 'Meldingsadres bewerken' : 'Meldingsadres toevoegen'"
+      :confirm-label="editingRecipient ? 'Opslaan' : 'Toevoegen'"
+      :busy="createRecipient.isPending.value || updateRecipient.isPending.value"
       @confirm="submitAddRecipient"
-      @cancel="showAddRecipient = false"
+      @cancel="showAddRecipient = false; editingRecipient = null"
     >
       <div class="space-y-4">
-        <MwField label="E-mail" for-id="recipient-email" required>
+        <MwField label="E-mail" for-id="recipient-email" required :error="recipientFieldError">
           <input
             id="recipient-email"
             v-model="recipientForm.email"
             type="email"
             required
-            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+            :readonly="Boolean(editingRecipient)"
+            :disabled="Boolean(editingRecipient)"
+            class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+            @input="recipientFieldError = ''"
           />
         </MwField>
-        <MwField label="Frequentie" for-id="recipient-frequency">
-          <MwSelect
-            id="recipient-frequency"
-            v-model="recipientForm.digestFrequency"
-            :options="DIGEST_OPTIONS"
-          />
-        </MwField>
-        <MwField :label="`Melding vanaf score: ${recipientForm.minScoreThreshold}%`" for-id="recipient-threshold">
+
+        <fieldset class="space-y-2">
+          <legend class="text-sm font-medium text-text">Wanneer melden?</legend>
+          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-2.5">
+            <input
+              v-model="recipientForm.mode"
+              type="radio"
+              value="threshold"
+              class="mt-0.5 h-4 w-4 accent-[var(--mw-color-accent-strong)]"
+            />
+            <span>
+              <span class="block text-sm font-medium text-text">Drempelmelding</span>
+              <span class="text-xs text-text-muted">Directe e-mail wanneer een match de score haalt.</span>
+            </span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-2.5">
+            <input
+              v-model="recipientForm.mode"
+              type="radio"
+              value="digest"
+              class="mt-0.5 h-4 w-4 accent-[var(--mw-color-accent-strong)]"
+            />
+            <span>
+              <span class="block text-sm font-medium text-text">Periodiek rapport</span>
+              <span class="text-xs text-text-muted">Samenvatting van openstaande matches op vaste cadence.</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <MwField
+          v-if="recipientForm.mode === 'threshold'"
+          :label="`Melding vanaf score: ${recipientForm.minScoreThreshold}%`"
+          for-id="recipient-threshold"
+        >
           <input
             id="recipient-threshold"
             v-model.number="recipientForm.minScoreThreshold"
@@ -645,6 +744,14 @@ function saveLocale(): void {
             class="w-full accent-[var(--mw-color-accent-strong)]"
           />
         </MwField>
+        <MwField v-else label="Rapportfrequentie" for-id="recipient-cadence">
+          <MwSelect
+            id="recipient-cadence"
+            v-model="recipientForm.digestCadence"
+            :options="DIGEST_OPTIONS"
+          />
+        </MwField>
+
         <div v-if="activeWatches.length > 0" class="rounded-md border border-border">
           <button
             type="button"
@@ -656,17 +763,17 @@ function saveLocale(): void {
           </button>
           <div v-if="recipientForm.watchesExpanded" class="max-h-44 space-y-1 border-t border-border px-3 py-2">
             <label
-              v-for="watch in activeWatches"
-              :key="watch.id"
+              v-for="watchItem in activeWatches"
+              :key="watchItem.id"
               class="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-surface-muted"
             >
               <input
                 type="checkbox"
-                class="h-4 w-4 rounded border-border text-accent-strong focus:ring-accent"
-                :checked="recipientForm.selectedWatchIds.includes(watch.id)"
-                @change="toggleWatchSelection(watch.id)"
+                class="mw-checkbox h-4 w-4 rounded border-border text-accent-strong focus:ring-accent"
+                :checked="recipientForm.selectedWatchIds.includes(watchItem.id)"
+                @change="toggleWatchSelection(watchItem.id)"
               />
-              <span class="text-text">{{ watch.label }}</span>
+              <span class="text-text">{{ watchItem.label }}</span>
             </label>
           </div>
         </div>

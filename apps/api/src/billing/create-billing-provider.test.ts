@@ -14,7 +14,12 @@ const BASE_ENV = {
   SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
   INTERNAL_JOB_SECRET: 'a-test-internal-job-secret-value',
   CORS_ORIGIN: 'http://localhost:5173',
+  ALLOW_DEMO_STORE: false,
+  DEV_DEMO_AUTH: false,
   BOIP_USE_FIXTURES: true,
+  EUIPO_USE_FIXTURES: false,
+  USPTO_USE_FIXTURES: false,
+  WIPO_USE_FIXTURES: false,
 } satisfies ApiEnv;
 
 describe('createBillingProvider', () => {

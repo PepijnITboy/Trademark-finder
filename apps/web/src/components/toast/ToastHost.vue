@@ -26,35 +26,37 @@ const toneDot: Record<string, string> = {
     aria-live="polite"
     aria-relevant="additions"
   >
-    <div
-      v-for="item in items"
-      :key="item.id"
-      class="pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 shadow-md"
-      :class="toneClass[item.tone]"
-      role="status"
-    >
-      <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full" :class="toneDot[item.tone]" aria-hidden="true" />
-      <div class="min-w-0 flex-1">
-        <p class="text-sm text-text">{{ item.message }}</p>
+    <TransitionGroup name="mw-toast">
+      <div
+        v-for="item in items"
+        :key="item.id"
+        class="pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 shadow-md"
+        :class="toneClass[item.tone]"
+        role="status"
+      >
+        <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full" :class="toneDot[item.tone]" aria-hidden="true" />
+        <div class="min-w-0 flex-1">
+          <p class="text-sm text-text">{{ item.message }}</p>
+          <button
+            v-if="item.actionLabel && item.onAction"
+            type="button"
+            class="mt-1 text-sm font-medium text-accent-strong underline-offset-2 hover:underline"
+            @click="item.onAction?.(); toast.dismiss(item.id)"
+          >
+            {{ item.actionLabel }}
+          </button>
+        </div>
         <button
-          v-if="item.actionLabel && item.onAction"
           type="button"
-          class="mt-1 text-sm font-medium text-accent-strong underline-offset-2 hover:underline"
-          @click="item.onAction?.(); toast.dismiss(item.id)"
+          class="rounded p-1 text-text-muted hover:bg-surface-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          :aria-label="'Sluit melding'"
+          @click="toast.dismiss(item.id)"
         >
-          {{ item.actionLabel }}
+          <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round" />
+          </svg>
         </button>
       </div>
-      <button
-        type="button"
-        class="rounded p-1 text-text-muted hover:bg-surface-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-        :aria-label="'Sluit melding'"
-        @click="toast.dismiss(item.id)"
-      >
-        <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round" />
-        </svg>
-      </button>
-    </div>
+    </TransitionGroup>
   </div>
 </template>

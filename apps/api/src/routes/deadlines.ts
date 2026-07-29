@@ -8,15 +8,30 @@ function daysBetween(fromIso: string, toIso: string): number {
 }
 
 /**
- * `/api/v1/deadlines` - upcoming opposition-filing deadlines for **actieve** matches only.
+ * `/api/v1/deadlines` - upcoming opposition-filing deadlines for possible + active matches.
  */
 export async function registerDeadlineRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/', async () => {
-    const organizationId = app.identityProvider.getIdentity().organizationId;
+  app.get('/', async (request) => {
+    const organizationId = request.tenant!.organizationId;
     const matches = await app.store.listMatches(organizationId);
     const now = new Date().toISOString();
 
-    const deadlines = matches
+    // Persist expire→archive for past deadlines still in inbox queues.
+    for (const match of matches) {
+      const deadline = match.candidate.oppositionDeadline;
+      if (!deadline || !isDeadlineEligibleStatus(match.status)) continue;
+      if (daysBetween(now, deadline.deadlineDate) >= 0) continue;
+      await app.store.updateMatchStatus(
+        organizationId,
+        match.id,
+        'opposition_deadline_passed',
+        'system:deadline-expire',
+      );
+    }
+
+    const refreshed = await app.store.listMatches(organizationId);
+
+    const deadlines = refreshed
       .filter((match) => isDeadlineEligibleStatus(match.status) && match.candidate.oppositionDeadline !== null)
       .map((match) => {
         const deadline = match.candidate.oppositionDeadline;

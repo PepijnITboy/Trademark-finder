@@ -16,6 +16,7 @@
     "test:unit": "pnpm -r test:unit",
     "test:integration": "pnpm -r test:integration",
     "test:e2e": "pnpm --filter @merkwacht/web test:e2e",
+    "tenancy:test": "pnpm --filter @merkwacht/database exec vitest run --no-cache src/tenancy && pnpm --filter @merkwacht/api exec vitest run --no-cache src/tenancy src/store/create-store.test.ts",
     "db:setup": "pnpm db:migrate && pnpm db:seed",
     "db:migrate": "supabase migration up",
     "db:seed": "supabase db reset --local",

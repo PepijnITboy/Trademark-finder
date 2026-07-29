@@ -35,9 +35,12 @@ const remainingBars = computed(() =>
         <p class="mt-1 text-xs text-text-muted">Weegprofiel {{ SCORE_WEIGHT_PROFILE_ID }}</p>
       </div>
       <div class="rounded-lg border border-border bg-surface p-5 sm:min-w-[14rem]">
-        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Tot oppositie klaar</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Oppositiedeadline</p>
         <div class="mt-3">
-          <DeadlineIndicator :days-remaining="daysRemaining" />
+          <DeadlineIndicator
+            :days-remaining="daysRemaining"
+            :deadline-date="match.candidate.oppositionDeadline?.deadlineDate"
+          />
         </div>
       </div>
     </div>

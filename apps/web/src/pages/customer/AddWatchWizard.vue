@@ -15,7 +15,7 @@ import Step4Preview from './wizard/Step4Preview.vue';
 import Step5Eligibility from './wizard/Step5Eligibility.vue';
 import Step6Settings from './wizard/Step6Settings.vue';
 import Step7Confirm from './wizard/Step7Confirm.vue';
-import WizardSteps from './wizard/WizardSteps.vue';
+import WizardSteps from '../../components/motion/WizardSteps.vue';
 
 const STEP_LABELS = ['Register', 'Nummer', 'Ophalen', 'Voorbeeld', 'Geschiktheid', 'Instellingen', 'Bevestigen'];
 
@@ -89,35 +89,41 @@ async function confirmCreate(): Promise<void> {
     <WizardSteps :current="step" :labels="STEP_LABELS" />
 
     <MwCard>
+      <Transition name="mw-step" mode="out-in">
       <Step1Register
         v-if="step === 1"
+        key="aw-1"
         v-model="registryCode"
         @next="step = 2"
         @cancel="cancel"
       />
       <Step2Number
         v-else-if="step === 2"
+        key="aw-2"
         v-model="registrationNumber"
         :registry-code="registryCode"
         :error-message="lookupErrorMessage"
         @next="runLookup"
         @back="step = 1"
       />
-      <Step3Fetching v-else-if="step === 3" :registration-number="registrationNumber" />
+      <Step3Fetching v-else-if="step === 3" key="aw-3" :registration-number="registrationNumber" />
       <Step4Preview
         v-else-if="step === 4 && lookupResult"
+        key="aw-4"
         :candidate="lookupResult"
         @next="step = 5"
         @back="step = 2"
       />
       <Step5Eligibility
         v-else-if="step === 5 && lookupResult"
+        key="aw-5"
         :eligibility="lookupResult.eligibility"
         @next="step = 6"
         @back="step = 4"
       />
       <Step6Settings
         v-else-if="step === 6"
+        key="aw-6"
         v-model:label="label"
         v-model:notes="notes"
         :nice-classes="niceClasses"
@@ -126,6 +132,7 @@ async function confirmCreate(): Promise<void> {
       />
       <Step7Confirm
         v-else-if="step === 7 && lookupResult"
+        key="aw-7"
         :candidate="lookupResult"
         :label="label"
         :notes="notes"
@@ -134,6 +141,7 @@ async function confirmCreate(): Promise<void> {
         @confirm="confirmCreate"
         @back="step = 6"
       />
+      </Transition>
     </MwCard>
   </MwPage>
 </template>

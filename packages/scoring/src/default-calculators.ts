@@ -1,6 +1,11 @@
 import type { ScoreComponentCalculator } from './score-component-calculator.js';
 import type { ScoringContext } from './scoring-context.js';
 import { jaccardSimilarity, normalizedStringSimilarity } from './text-distance.js';
+import {
+  canComputeNiceClassOverlap,
+  classificationSchemeForRegister,
+  DEFAULT_REGISTER_CATALOG,
+} from '@merkwacht/domain';
 
 /**
  * Literal/orthographic closeness: a blend of normalized edit-distance
@@ -103,6 +108,16 @@ export const semanticSimilarityCalculator: ScoreComponentCalculator = {
 export const niceClassOverlapCalculator: ScoreComponentCalculator = {
   component: 'niceClassOverlap',
   calculate(context: ScoringContext): number {
+    const watchedScheme =
+      context.watchedClassificationSchemeId ??
+      classificationSchemeForRegister(DEFAULT_REGISTER_CATALOG, context.watched.snapshot.registryCode);
+    const candidateScheme =
+      context.candidateClassificationSchemeId ??
+      classificationSchemeForRegister(DEFAULT_REGISTER_CATALOG, context.candidate.registryCode);
+    if (!canComputeNiceClassOverlap(watchedScheme, candidateScheme)) {
+      // Cross-scheme pairs are incomparable — never invent Nice overlap.
+      return 0;
+    }
     return jaccardSimilarity(context.watched.snapshot.niceClasses, context.candidate.niceClasses);
   },
 };

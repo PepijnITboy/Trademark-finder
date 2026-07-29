@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import ConfirmDialog from '../../components/ConfirmDialog.vue';
 import MwBanner from '../../components/MwBanner.vue';
 import MwButton from '../../components/MwButton.vue';
 import MwCard from '../../components/MwCard.vue';
@@ -12,13 +13,14 @@ import {
   PLAN_ORDER,
   SUBSCRIPTION_STATUS_LABELS_NL,
   SUPPORT_TIER_LABELS_NL,
+  useCancelAtPeriodEnd,
   useChangePlan,
   useSubscription,
   useSubscriptionPlans,
+  useUndoCancelAtPeriodEnd,
 } from '../../api/subscription';
 import type { FeatureFlag, PlanCatalogRecord, SubscriptionPlan } from '../../api/types';
 import { useNotificationRecipients } from '../../api/notification-recipients';
-import { useNameResearchCredits } from '../../api/name-research';
 import { useWatchedTrademarks } from '../../api/watched-trademarks';
 import { formatDate } from '../../lib/format';
 import { useToastStore } from '../../stores/toast';
@@ -27,8 +29,9 @@ const subscriptionQuery = useSubscription();
 const plansQuery = useSubscriptionPlans();
 const watchedQuery = useWatchedTrademarks();
 const recipientsQuery = useNotificationRecipients();
-const researchCreditsQuery = useNameResearchCredits();
 const changePlan = useChangePlan();
+const cancelAtEnd = useCancelAtPeriodEnd();
+const undoCancel = useUndoCancelAtPeriodEnd();
 const toast = useToastStore();
 
 const subscription = computed(() => subscriptionQuery.data.value?.subscription);
@@ -67,6 +70,25 @@ function changeToPlan(plan: SubscriptionPlan): void {
   changePlan.mutate(plan, {
     onSuccess: () => toast.success('Abonnement bijgewerkt'),
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Planwijziging mislukt'),
+  });
+}
+
+const showCancelConfirm = ref(false);
+
+function confirmCancel(): void {
+  cancelAtEnd.mutate(undefined, {
+    onSuccess: () => {
+      showCancelConfirm.value = false;
+      toast.success('Opzegging gepland aan einde periode');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Opzeggen mislukt'),
+  });
+}
+
+function undoCancelRequest(): void {
+  undoCancel.mutate(undefined, {
+    onSuccess: () => toast.success('Opzegging ingetrokken'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Intrekken mislukt'),
   });
 }
 
@@ -109,6 +131,31 @@ function formatPrice(cents: number): string {
             <p class="text-sm text-text-muted">
               Periode eindigt op {{ formatDate(subscription.currentPeriodEnd) }}
             </p>
+            <p v-if="subscription.nextInvoiceAt" class="text-sm text-text-muted">
+              Volgende factuur: {{ formatDate(subscription.nextInvoiceAt) }} (excl. 21% BTW op factuur)
+            </p>
+            <p v-if="subscription.cancelAtPeriodEnd" class="text-sm text-warning">
+              Opzegging gepland — toegang tot {{ formatDate(subscription.currentPeriodEnd) }}
+            </p>
+            <div class="pt-2">
+              <MwButton
+                v-if="!subscription.cancelAtPeriodEnd"
+                variant="danger"
+                size="sm"
+                @click="showCancelConfirm = true"
+              >
+                Opzeggen per einde periode
+              </MwButton>
+              <MwButton
+                v-else
+                variant="secondary"
+                size="sm"
+                :loading="undoCancel.isPending.value"
+                @click="undoCancelRequest"
+              >
+                Opzegging intrekken
+              </MwButton>
+            </div>
             <p class="text-sm text-text-muted">
               Support: {{ SUPPORT_TIER_LABELS_NL[entitlements.supportTier] }}
             </p>
@@ -130,14 +177,10 @@ function formatPrice(cents: number): string {
               </dd>
             </div>
             <div>
-              <dt class="text-xs font-medium text-text-muted">Merkonderzoek-credits</dt>
-              <dd class="mt-1 text-2xl font-semibold tabular-nums text-text">
-                {{ researchCreditsQuery.data.value?.balance ?? '—' }}
+              <dt class="text-xs font-medium text-text-muted">Merkonderzoek</dt>
+              <dd class="mt-1 text-sm text-text-muted">
+                Pre-filing rapporten worden per aanvraag gefactureerd (zie Betalingen).
               </dd>
-              <p class="mt-1 text-xs text-text-muted">
-                Gebruikt deze periode: {{ researchCreditsQuery.data.value?.usedThisPeriod ?? 0 }}
-                · 1 credit = 1 volledige scan
-              </p>
             </div>
           </dl>
         </MwCard>
@@ -182,5 +225,16 @@ function formatPrice(cents: number): string {
         </div>
       </MwCard>
     </template>
+
+    <ConfirmDialog
+      :open="showCancelConfirm"
+      title="Abonnement opzeggen"
+      :description="subscription ? `Uw abonnement blijft actief tot ${formatDate(subscription.currentPeriodEnd)}. Daarna wordt er geen nieuwe factuur meer aangemaakt.` : undefined"
+      tone="danger"
+      confirm-label="Opzeggen"
+      :busy="cancelAtEnd.isPending.value"
+      @confirm="confirmCancel"
+      @cancel="showCancelConfirm = false"
+    />
   </MwPage>
 </template>

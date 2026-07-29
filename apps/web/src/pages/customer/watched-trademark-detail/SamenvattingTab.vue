@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { resolveProtectionDisplay } from '@merkwacht/domain';
 import StatusBadge from '../../../components/StatusBadge.vue';
 import { WATCHED_TRADEMARK_STATUS_LABELS_NL } from '../../../api/watched-trademarks';
 import { formatDate, formatNiceClasses } from '../../../lib/format';
@@ -7,6 +8,14 @@ import { priorityFromScore } from '../../../lib/priority';
 import type { TrademarkMatchRecord, WatchedTrademarkRecord } from '../../../api/types';
 
 const props = defineProps<{ watched: WatchedTrademarkRecord; matches: readonly TrademarkMatchRecord[] }>();
+
+const protection = computed(() =>
+  resolveProtectionDisplay({
+    status: props.watched.status,
+    eligibility: props.watched.eligibility,
+    registerMonitoringOk: props.watched.registerMonitoringOk ?? false,
+  }),
+);
 
 const activeMatches = computed(() => props.matches.filter((m) => m.status === 'new' || m.status === 'under_review'));
 const highPriorityCount = computed(
@@ -30,11 +39,9 @@ const nextDeadline = computed(() => {
             :label="WATCHED_TRADEMARK_STATUS_LABELS_NL[watched.status]"
             :tone="watched.status === 'active' ? 'success' : 'neutral'"
           />
-          <StatusBadge
-            :label="watched.eligibility.eligible ? 'Geschikt voor bewaking' : 'Niet geschikt voor bewaking'"
-            :tone="watched.eligibility.eligible ? 'success' : 'warning'"
-          />
+          <StatusBadge :label="protection.labelNl" :tone="protection.tone" />
         </div>
+        <p class="mt-2 text-sm text-text-muted">{{ protection.detailNl }}</p>
         <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
           <div>
             <dt class="text-xs uppercase tracking-wide text-text-muted">Merktekst</dt>
@@ -68,9 +75,9 @@ const nextDeadline = computed(() => {
         </p>
       </div>
       <div class="rounded-lg border border-border bg-surface p-4">
-        <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Eerstvolgende termijn</p>
+        <p class="text-xs font-medium uppercase tracking-wide text-text-muted">Eerstvolgende oppositiedeadline</p>
         <p class="mt-1 text-sm font-medium text-text">
-          {{ nextDeadline ? formatDate(nextDeadline.deadlineDate) : 'Geen openstaande termijn' }}
+          {{ nextDeadline ? formatDate(nextDeadline.deadlineDate) : 'Geen openstaande deadline' }}
         </p>
       </div>
     </div>
